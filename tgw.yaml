@@ -1,0 +1,22 @@
+
+Type: AWS::EC2::TransitGatewayAttachment
+Properties:
+  SubnetIds:
+    - String
+  Tags:
+    - Tag
+  TransitGatewayId: String
+  VpcId: String
+
+Type: AWS::EC2::Route
+Properties:
+  DestinationCidrBlock: String
+  DestinationIpv6CidrBlock: String
+  EgressOnlyInternetGatewayId: String
+  GatewayId: String
+  InstanceId: String
+  NatGatewayId: String
+  NetworkInterfaceId: String
+  RouteTableId: String
+  TransitGatewayId: String
+  VpcPeeringConnectionId: String
