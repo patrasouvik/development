@@ -12,6 +12,7 @@ Metadata: # Metadata Section
       - pDefaultRouteTablePropagation
       - pDnsSupport
       - pVpnEcmpSupport
+      - pVpcId
 
     ParameterLabels: # Parameter Labels
       pAmazonAsn:
@@ -26,6 +27,8 @@ Metadata: # Metadata Section
         default: DNS Support
       pVpnEcmpSupport:
         default: Equal Cost Multipath Protocol
+      pVpcId:
+        default: Auto VpcId
 
 Parameters: # CloudFormation Parameters
   pAmazonAsn: # Amazon side BGP ASN
@@ -76,6 +79,14 @@ Parameters: # CloudFormation Parameters
       - "enable"
       - "disable"
 
+  pVpcId:
+    Type: String
+    Description: VPCID.
+    Default: "disable"
+    AllowedValues:
+        - "enable"
+        - "disable"
+
 Resources: # CloudFormation Resources
   rTransitGateway:
     Type: "AWS::EC2::TransitGateway"
@@ -90,6 +101,17 @@ Resources: # CloudFormation Resources
         - Key: Name
           Value: 'My Transit Gateway'
       VpnEcmpSupport: !Ref pVpnEcmpSupport
+
+  rTransitGatewayAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+        - String
+      Tags:
+        - Key: Name
+          Value: 'My Transit Gateway Attachment'
+      TransitGatewayId: !Ref rTransitGateway
+      VpcId: String
 
 Outputs:
   oTransitGatewayId: #Outputs the Transit Gateway ID
