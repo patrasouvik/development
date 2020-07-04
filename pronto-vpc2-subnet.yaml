@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Subnet Creation for Pronto VPC-2
+Parameters:
+  StackParameter:
+    Type: String
+    Default: Please enter the correct stack name
+
+Resources:
+  InternetGateway1:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::Region'
+              - Internet Gateway1
+
+  AttachGateway1:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !ImportValue
+        'Fn::Sub': '${StackParameter}-VPC2'
+      InternetGatewayId: !Ref InternetGateway1
+
+  # Public subnets for 2 VPC's, one for each
+  PublicSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !ImportValue
+        'Fn::Sub': '${StackParameter}-VPC2'
+      CidrBlock: 10.48.160.64/28
+      AvailabilityZone: !Join
+        - ''
+        - - !Ref 'AWS::Region'
+          - b
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-1
+
+  # Private subnets for 2 VPC's, 3 for each
+  PrivateSubnet1VPC2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !ImportValue
+        'Fn::Sub': '${StackParameter}-VPC2'
+      CidrBlock: 10.48.160.80/28
+      AvailabilityZone: !Join
+        - ''
+        - - !Ref 'AWS::Region'
+          - b
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC-2-Private-1
+  PrivateSubnet2VPC2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !ImportValue
+        'Fn::Sub': '${StackParameter}-VPC2'
+      CidrBlock: 10.48.160.96/28
+      AvailabilityZone: !Join
+        - ''
+        - - !Ref 'AWS::Region'
+          - b
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC-2-Private-2
+  PrivateSubnet3VPC2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !ImportValue
+        'Fn::Sub': '${StackParameter}-VPC2'
+      CidrBlock: 10.48.160.112/28
+      AvailabilityZone: !Join
+        - ''
+        - - !Ref 'AWS::Region'
+          - b
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC-2-Private-3
+
+# Some route tables for our subnets:
+  PublicRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !ImportValue
+        'Fn::Sub': '${StackParameter}-VPC2'
+      Tags:
+      - Key: Name
+        Value: Public
+
+  PublicRoute1:   # Public route table has direct routing to IGW:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway1
+    Properties:
+      RouteTableId: !Ref PublicRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway1
+
+  # Here is a private route table:
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !ImportValue
+        'Fn::Sub': '${StackParameter}-VPC2'
+      Tags:
+      - Key: Name
+        Value: Private
+
+  PrivateRoute1:            # Private route table can access web via NAT (created below)
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+# A NAT Gateway:
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIPAddress1.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub NAT-${AWS::StackName}
+
+  ElasticIPAddress1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+
+# Attach the public subnets to public route tables,
+# and attach the private subnets to private route tables:
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable1
+
+  PrivateSubnet1VPC2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1VPC2
+      RouteTableId: !Ref PrivateRouteTable1
+  PrivateSubnet2VPC2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2VPC2
+      RouteTableId: !Ref PrivateRouteTable1
+  PrivateSubnet3VPC2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3VPC2
+      RouteTableId: !Ref PrivateRouteTable1
+
+
+Outputs:
+  InternetGateway1:
+    Description: Internet Gateway (IGW) Id
+    Value: !Ref InternetGateway1
+    Export:
+      Name: !Sub '${AWS::StackName}-IGW1'
+
+  AttachGateway1:
+    Description: Attach Gateway (AGW) Id
+    Value: !Ref AttachGateway1
+    Export:
+      Name: !Sub '${AWS::StackName}-AGW1'
