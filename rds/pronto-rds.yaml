@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  Environment:
+    Type: String
+    Default: test
+  VPCParameter:
+    Type: String
+    Default: vf-pos-test-vpc
+  PrivateSubnetA:
+    Type: String
+    Default: vf-pos-test-subnet-PrivateA
+  PrivateSubnetB:
+    Type: String
+    Default: vf-pos-test-subnet-PrivateB
+  PrivateSubnetC:
+    Type: String
+    Default: vf-pos-test-subnet-PrivateC
+Resources:
+  OralceEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: pronto-rds-securitygroup
+      GroupName: pronto-rds-sg
+      SecurityGroupIngress: 
+        - CidrIp: 10.48.160.0/25
+          Description: RDS only
+          FromPort: 1521
+          IpProtocol: TCP
+          ToPort: 1521
+      Tags: 
+        - Key: Environment
+          Value: !Sub ${Environment}
+        - Key: Name
+          Value: !Sub 'pronto-rds-sg-${Environment}'
+      VpcId: !ImportValue
+        'Fn::Sub': '${VPCParameter}'
+  RDSDBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: pronto-db-parameter-group
+      Family: oracle-se2-18
+      Parameters:
+        open_cursors: 1500
+        workarea_size_policy: AUTO
+        processes: 600
+        undo_retention: 2400
+        dml_locks: 4000
+        sec_protocol_error_further_action: CONTINUE
+        sec_protocol_error_trace_action: LOG
+        audit_trail: DB
+      Tags:
+      - Key: Environment
+        Value: !Sub ${Environment}
+      - Key: Name
+        Value: !Sub 'pronto-rds-db-parameter-group-${Environment}'
+      - Key: ApplicationName
+        Value: pronto-pos
+
+  RDSDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: pronto-rds-db-subnet-group
+      DBSubnetGroupName: pronto-rds-db-subnet-group
+      SubnetIds:
+      - Fn::ImportValue:
+          Fn::Sub: ${PrivateSubnetA}
+      - Fn::ImportValue:
+          Fn::Sub: ${PrivateSubnetB}
+      - Fn::ImportValue:
+          Fn::Sub: ${PrivateSubnetC}
+      Tags:
+      - Key: Environment
+        Value: !Sub ${Environment}
+      - Key: Name
+        Value: !Sub 'pronto-rds-db-subnet-group-${Environment}'
+      - Key: ApplicationName
+        Value: pronto-pos
+  RDSNEOPILDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: 220
+      AutoMinorVersionUpgrade: false
+      BackupRetentionPeriod: 10
+      CharacterSetName: AL32UTF8
+      CopyTagsToSnapshot: true
+      DBInstanceClass: db.t3.medium
+      DBInstanceIdentifier: pronto-neopil-rds
+      DBName: neopildb
+      DBParameterGroupName:
+        Ref: RDSDBParameterGroup
+      VPCSecurityGroups:
+      - Ref: OralceEC2SecurityGroup
+      DBSubnetGroupName:
+        Ref: RDSDBSubnetGroup
+      Engine: oracle-se2
+      EngineVersion: 18.0.0.0.ru-2020-04.rur-2020-04.r1
+      LicenseModel: license-included
+      MasterUsername: neopildbuser
+      MasterUserPassword: V1fxIbs0hLaP4DEwmeV3
+      MultiAZ: true
+      Port: 1521
+      PreferredBackupWindow: 16:00-17:00
+      PreferredMaintenanceWindow: Sat:17:00-Sat:18:00
+      PubliclyAccessible: false
+      StorageEncrypted: true
+      StorageType: gp2
+      Tags:
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Name
+        Value: pronto-neopil-rds
+      - Key: ApplicationName
+        Value: !Sub 'pronto-neopil-${Environment}'
+  ProntoDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBSnapshotIdentifier: 'arn:aws:rds:ap-southeast-2:324063706331:snapshot:pronto-db-20072020'
+      AllocatedStorage: 500
+      AutoMinorVersionUpgrade: false
+      BackupRetentionPeriod: 10
+      CharacterSetName: AL32UTF8
+      CopyTagsToSnapshot: true
+      DBInstanceClass: db.m5.large
+      DBInstanceIdentifier: pronto-rds-oracle
+      DBName: prontodb
+      DBParameterGroupName:
+        Ref: RDSDBParameterGroup
+      VPCSecurityGroups:
+      - Ref: OralceEC2SecurityGroup
+      DBSubnetGroupName:
+        Ref: RDSDBSubnetGroup
+      Engine: oracle-se2
+      EngineVersion: 18.0.0.0.ru-2020-04.rur-2020-04.r1
+      LicenseModel: license-included
+      MultiAZ: true
+      Port: 1521
+      PreferredBackupWindow: 16:00-17:00
+      PreferredMaintenanceWindow: Sat:17:00-Sat:18:00
+      PubliclyAccessible: false
+      StorageEncrypted: true
+      StorageType: gp2
+      Tags:
+      - Key: Environment
+        Value: !Sub ${Environment}
+      - Key: Name
+        Value: !Sub 'pronto-rds-${Environment}'
+
+Outputs:
+  RDSNEOPILDBInstance:
+    Description: RDS NEOPIL DB Instance
+    Value:
+      Ref: RDSNEOPILDBInstance
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-neopil-db
+  ProntoDBInstance:
+    Description: Pronto DB Instance
+    Value:
+      Ref: ProntoDBInstance
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-pronto-db
