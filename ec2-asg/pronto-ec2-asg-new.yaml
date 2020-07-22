@@ -220,7 +220,7 @@ Resources:
       
 
           
-# Network Load Balancer below:
+# NPE Network Load Balancer below:
   NPEEC2NetworkLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -239,7 +239,7 @@ Resources:
         Value: !Sub 'vf-pronto-networklb-${Environment}'
 
 
-# NLB Target groups defined below:
+# NPE Target groups defined below:
   NPEEC2NLBTargetGroup443:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -271,7 +271,7 @@ Resources:
       - Key: Name
         Value: !Sub 'vf-pronto-networklb-target-${Environment}'
         
-# NLB Listeners defined below:
+# NPE NLB Listeners defined below:
   NPEEC2NetworkLoadBalancerListener443:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -293,7 +293,7 @@ Resources:
       Port: 22
       Protocol: TCP
 
-# Network Load Balancer below:
+# PIE Network Load Balancer below:
   PIEEC2NetworkLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -312,7 +312,7 @@ Resources:
         Value: !Sub 'vf-PIE-networklb-${Environment}'
 
 
-# NLB Target groups defined below:
+# PIE Target groups defined below:
   PIEEC2NLBTargetGroup443:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -344,7 +344,7 @@ Resources:
       - Key: Name
         Value: !Sub 'vf-PIE-networklb-target-${Environment}'
         
-# NLB Listeners defined below:
+# PIE NLB Listeners defined below:
   PIEEC2NetworkLoadBalancerListener443:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -367,7 +367,7 @@ Resources:
       Protocol: TCP
 
           
-# Network Load Balancer below:
+# NOEPIL Network Load Balancer below:
   NEOPILEEC2NetworkLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -386,7 +386,7 @@ Resources:
         Value: !Sub 'vf-NEOPIL-networklb-${Environment}'
 
 
-# NLB Target groups defined below:
+# NEOPIL Target groups defined below:
   NEOPILEEC2NLBTargetGroup443:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -418,7 +418,7 @@ Resources:
       - Key: Name
         Value: !Sub 'vf-NEOPIL-networklb-target-${Environment}'
         
-# NLB Listeners defined below:
+# NEOPIL Listeners defined below:
   NEOPILEEC2NetworkLoadBalancerListener443:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
