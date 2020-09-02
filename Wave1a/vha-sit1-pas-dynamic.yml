@@ -1,0 +1,854 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: TPGT PAS NPE dynamic stack. Creates an ALB, ASG, LT, CW Log Groups and
+  Security Groups.
+Parameters:
+  ParamEnvName:
+    Type: String
+    Description: Stack environment name
+    Default: sit1
+    AllowedValues:
+    - pt
+    - dev
+    - sit1
+    - sit2
+    - sit3
+    ConstraintDescription: Allowed values are pt, sit1, sit2, sit3, dev.
+  ParamVpc:
+    Type: String
+    Description: VPC ID
+    Default: vpc-0fd6d5d14dc0892d3
+  ParamKmsCmk:
+    Type: String
+    Description: KMS CMK ARN for encryption
+    Default: arn:aws:kms:ap-southeast-2:622637471932:key/c4d618dd-8d37-4229-b889-1811ca51b16f
+  ParamPrivateSubnetIdA:
+    Type: String
+    Description: Private subnet ID A
+    Default: subnet-066d60832f0375988
+  ParamPrivateSubnetIdB:
+    Type: String
+    Description: Private subnet ID B
+    Default: subnet-079a7b411561406b0
+  ParamAcmCert:
+    Type: String
+    Description: ACM certificate ARN for load balancers
+    Default: arn:aws:acm:ap-southeast-2:622637471932:certificate/a05ed8a6-bfe6-410a-8560-343b286a8f93
+  ParamEc2IamProfile:
+    Type: String
+    Description: IAM instance profile to use for ASGs
+    Default: arn:aws:iam::622637471932:instance-profile/tpgt-sit1-pas-application-role
+  ParamImageId:
+    Type: AWS::EC2::Image::Id
+    Description: AMS Amazon Linux 2 base image AMI-ID
+    Default: ami-060735c9d533aba4c
+  ParamHostedZone:
+    Type: String
+    Description: Route 53 zone ID
+    Default: Z09156811S5IQCFA8Y91P
+Mappings:
+  Environments:
+    pt:
+      ASMAX: 4
+      ASMIN: 2
+      LogRetentionInDays: 60
+      VolumeSize: 50
+      InstanceType: t2.medium
+      AZ1Subnet: 10.153.140.0/26
+      AZ2Subnet: 10.153.140.64/26
+    dev:
+      ASMAX: 2
+      ASMIN: 1
+      LogRetentionInDays: 7
+      VolumeSize: 30
+      InstanceType: t2.medium
+      AZ1Subnet: 10.153.140.0/26
+      AZ2Subnet: 10.153.140.64/26
+    sit1:
+      ASMAX: 2
+      ASMIN: 1
+      LogRetentionInDays: 7
+      VolumeSize: 30
+      InstanceType: t2.medium
+      AZ1Subnet: 10.153.140.0/26
+      AZ2Subnet: 10.153.140.64/26
+    sit2:
+      ASMAX: 2
+      ASMIN: 1
+      LogRetentionInDays: 7
+      VolumeSize: 30
+      InstanceType: t2.medium
+      AZ1Subnet: 10.153.140.0/26
+      AZ2Subnet: 10.153.140.64/26
+    sit3:
+      ASMAX: 2
+      ASMIN: 1
+      LogRetentionInDays: 7
+      VolumeSize: 30
+      InstanceType: t2.medium
+      AZ1Subnet: 10.153.140.0/26
+      AZ2Subnet: 10.153.140.64/26
+Outputs:
+  AlbUrl:
+    Description: App load balancer URL
+    Value:
+      Fn::Join:
+      - ''
+      - - https://
+        - Fn::GetAtt:
+          - ApplicationLoadBalancer
+          - DNSName
+  LaunchTemplateId:
+    Description: Launch template ID
+    Value:
+      Ref: LaunchTemplate
+  AutoScalingId:
+    Description: Auto scaling group ID
+    Value:
+      Ref: PASServerGroup
+  AlbSecurityGroupId:
+    Description: Security group ID
+    Value:
+      Ref: AlbSecurityGroup
+  Ec2SecurityGroupId:
+    Description: Security group ID
+    Value:
+      Ref: Ec2SecurityGroup
+  Route53Alias:
+    Description: Route 53 alias record for ALB
+    Value:
+      Ref: LoadBalancerAlias
+Resources:
+  PASServerGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+        Count:
+          Fn::FindInMap:
+          - Environments
+          - Ref: ParamEnvName
+          - ASMIN
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: 1
+        MinInstancesInService: 1
+        PauseTime: PT15M
+        WaitOnResourceSignals: true
+        SuspendProcesses:
+        - HealthCheck
+        - ReplaceUnhealthy
+        - AZRebalance
+        - AlarmNotification
+        - ScheduledActions
+    Properties:
+      VPCZoneIdentifier:
+      - Ref: ParamPrivateSubnetIdA
+      - Ref: ParamPrivateSubnetIdB
+      HealthCheckGracePeriod: 300
+      HealthCheckType: ELB
+      LaunchTemplate:
+        LaunchTemplateId:
+          Ref: LaunchTemplate
+        Version:
+          Fn::GetAtt:
+          - LaunchTemplate
+          - LatestVersionNumber
+      MinSize:
+        Fn::FindInMap:
+        - Environments
+        - Ref: ParamEnvName
+        - ASMIN
+      MaxSize:
+        Fn::FindInMap:
+        - Environments
+        - Ref: ParamEnvName
+        - ASMAX
+      TargetGroupARNs:
+      - Ref: ALBTargetGroup
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - "-"
+          - - tpgt
+            - Ref: ParamEnvName
+            - pas
+            - ec2
+        PropagateAtLaunch: true
+      - Key: Backup
+        Value: 'false'
+        PropagateAtLaunch: true
+      - Key: DataClassification
+        Value: Highly Sensitive
+        PropagateAtLaunch: true
+      - Key: Role
+        Value: AppServer
+        PropagateAtLaunch: true
+  ScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName:
+        Ref: PASServerGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 75
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName:
+        Fn::Join:
+        - "-"
+        - - tpgt
+          - Ref: ParamEnvName
+          - pas
+          - launchtemplate
+      LaunchTemplateData:
+        ImageId:
+          Ref: ParamImageId
+        InstanceType:
+          Fn::FindInMap:
+          - Environments
+          - Ref: ParamEnvName
+          - InstanceType
+        IamInstanceProfile:
+          Arn:
+            Ref: ParamEc2IamProfile
+        NetworkInterfaces:
+        - DeviceIndex: 0
+          AssociatePublicIpAddress: false
+          DeleteOnTermination: true
+          Groups:
+          - Ref: Ec2SecurityGroup
+        TagSpecifications:
+        - ResourceType: instance
+          Tags:
+          - Key: Name
+            Value:
+              Fn::Join:
+              - "-"
+              - - tpgt
+                - Ref: ParamEnvName
+                - pas
+                - launchtemplate
+        BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            VolumeSize:
+              Fn::FindInMap:
+              - Environments
+              - Ref: ParamEnvName
+              - VolumeSize
+            VolumeType: gp2
+            DeleteOnTermination: true
+            Encrypted: true
+            KmsKeyId:
+              Ref: ParamKmsCmk
+        UserData:
+          Fn::Base64:
+            Fn::Sub: |
+              #!/bin/bash -xe
+              START=$(date +%s);
+
+              # Set Secured Variables
+              #============================
+
+              # Get DB Credentials and store in Shell env variables utilized by PAS application ./bin/setenv.sh script
+              export ENV_USER=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-pas-dbuser --with-decryption --query "Parameters[].{Val:Value}" --output text)
+              export ENV_PASS=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-pas-dbpass --with-decryption --query "Parameters[].{Val:Value}" --output text)
+
+              export NESSUS_KEY=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-pas-nessuskey --with-decryption --query "Parameters[].{Val:Value}" --output text)
+
+              # Enable console logging now that sensitive values have been retrieved
+              exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+              # Get the latest CloudFormation package
+              yum update -y aws-cfn-bootstrap
+
+              #Cloudwatch configuration
+              #============================
+              cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json <<EOL
+              {
+                "logs": {
+                  "logs_collected": {
+                    "files": {
+                      "collect_list": [
+                        {
+                          "file_path": "/var/log/auth",
+                          "log_group_name": "{instance_id}",
+                          "log_stream_name": "/var/log/auth",
+                          "timestamp_format": "%b %d %H:%M:%S"
+                        },
+                        {
+                          "file_path": "/var/log/user-data.log",
+                          "log_group_name": "{instance_id}",
+                          "log_stream_name": "/var/log/user-data.log",
+                          "timestamp_format": "%b %d %H:%M:%S"
+                        },
+                        {
+                          "file_path": "/opt/tomcat/logs/localhost_access_log.*.txt",
+                          "log_group_name": "{instance_id}",
+                          "log_stream_name": "/opt/tomcat/logs/localhost_access_log.txt",
+                          "timestamp_format": "%b %d %H:%M:%S"
+                        },
+                        {
+                          "file_path": "/opt/tomcat/logs/localhost.*.log",
+                          "log_group_name": "{instance_id}",
+                          "log_stream_name": "/opt/tomcat/logs/localhost.log",
+                          "timestamp_format": "%b %d %H:%M:%S"
+                        },
+                        {
+                          "file_path": "/opt/tomcat/logs/catalina.*.log",
+                          "log_group_name": "{instance_id}",
+                          "log_stream_name": "/opt/tomcat/logs/catalina.log",
+                          "timestamp_format": "%b %d %H:%M:%S"
+                        },
+                        {
+                          "file_path": "/opt/log/pas/pas_Server1_1.log",
+                          "log_group_name": "{instance_id}",
+                          "log_stream_name": "/opt/log/pas/pas_Server1_1.log",
+                          "timestamp_format": "%b %d %H:%M:%S"
+                        },
+                        {
+                          "file_path": "/opt/tomcat/logs/localhost_access_log.*.txt",
+                          "log_group_name": "customer-pas-${ParamEnvName}-tomcat-localhost-access-log",
+                          "log_stream_name": "{instance_id}",
+                          "timestamp_format": "%b %d %H:%M:%S"
+                        },
+                        {
+                          "file_path": "/opt/tomcat/logs/localhost.*.log",
+                          "log_group_name": "customer-pas-${ParamEnvName}-tomcat-localhost-log",
+                          "log_stream_name": "{instance_id}",
+                          "timestamp_format": "%b %d %H:%M:%S"
+                        },
+                        {
+                          "file_path": "/opt/tomcat/logs/catalina.*.log",
+                          "log_group_name": "customer-pas-${ParamEnvName}-tomcat-catalina-log",
+                          "log_stream_name": "{instance_id}",
+                          "timestamp_format": "%b %d %H:%M:%S"
+                        },
+                        {
+                          "file_path": "/opt/log/pas/pas_Server1_1.log",
+                          "log_group_name": "customer-pas-${ParamEnvName}-application-log",
+                          "log_stream_name": "{instance_id}",
+                          "timestamp_format": "%b %d %H:%M:%S"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+
+              EOL
+              sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a append-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json
+
+              #Splunk Installation
+              #============================
+              cd ~/
+              aws s3 cp s3://tpgt-${ParamEnvName}-pas-s3-app/splunkforwarder-8.0.5-Linux-x86_64.tgz /opt/ && cd /opt
+              tar -xvzf splunkforwarder-8.0.5-Linux-x86_64.tgz
+              aws s3 cp s3://tpgt-${ParamEnvName}-pas-s3-app/splunk-config.zip /opt/splunkforwarder/etc && cd  /opt/splunkforwarder/etc
+              unzip splunk-config.zip
+              sudo /opt/splunkforwarder/bin/splunk start --accept-license --answer-yes --no-prompt --seed-passwd mypassword
+
+              #Taneble agent installation
+              #=============================
+              cd ~/
+              aws s3 cp s3://tpgt-${ParamEnvName}-pas-s3-app/NessusAgent-8.0.0-amzn.x86_64.rpm .
+              sudo yum -y install NessusAgent-8.0.0-amzn.x86_64.rpm
+
+              # Hide Nessus key value in sub-script
+              cat >nessusStart.sh <<EOL
+              #!/bin/bash
+              /opt/nessus_agent/sbin/nessuscli agent link --key="$NESSUS_KEY" --host=cloud.tenable.com --port=443
+
+              EOL
+              chmod +x nessusStart.sh
+              ./nessusStart.sh
+
+              /sbin/service nessusagent start
+
+              #FireEye installation
+              #============================
+              cd ~/
+              mkdir -p /opt/fireeye
+              aws s3 cp s3://tpgt-${ParamEnvName}-pas-s3-app/IMAGE_HX_AGENT_LINUX_30.19.6.tgz IMAGE_HX_AGENT_LINUX_30.19.6.tgz
+              tar -xvzf IMAGE_HX_AGENT_LINUX_30.19.6.tgz
+              mv xagt-30.19.6-1.el7.x86_64.rpm agent_config.json /opt/fireeye && cd /opt/fireeye/
+              sudo yum -y install xagt-30.19.6-1.el7.x86_64.rpm
+              sudo /opt/fireeye/bin/xagt -i /opt/fireeye/agent_config.json
+              sudo systemctl start xagt && sudo systemctl enable xagt
+
+              # EFS Configuration
+              #=======================================
+              yum -y install amazon-efs-utils
+              mkdir -p /home/ec2-user/efs-mount-point
+
+              EFS_TARGET=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-pas-efstarget --query "Parameters[].{Val:Value}" --output text)
+              EFS_IP=$(dig @169.254.169.253 +short $EFS_TARGET | head -n 1)
+              EFS_FS_ID=$(echo $EFS_TARGET | grep -oP "[^.]*" | head -n 1)
+              echo "$EFS_IP $EFS_TARGET" >> /etc/hosts
+
+              mount -t efs -o tls "$EFS_FS_ID:/" /home/ec2-user/efs-mount-point
+
+              #Application Installation
+              #=======================================
+              amazon-linux-extras install java-openjdk11 -y
+
+
+              cd /opt
+              aws s3 cp s3://tpgt-${ParamEnvName}-pas-s3-app/pas-package-v.4.0.zip pas-package-v.4.0.zip
+              unzip /opt/pas-package-v.4.0.zip
+              mv pas-package-v.2.0 tomcat
+              cd /opt/tomcat/bin
+
+              keytool -genkeypair -noprompt -alias web.${ParamEnvName}.npe.pas.aws.vodafone.com.au -keyalg RSA -validity 365 -keystore paskey.jks -keypass params -storepass params -dname "CN=web.${ParamEnvName}.npe.pas.aws.vodafone.com.au, OU=CIO, O=VHA, L=Sydney, ST=New South Wales, C=AU"
+              mv -f paskey.jks /opt/tomcat/conf
+
+              chmod +x startup.sh
+              chmod +x shutdown.sh
+              ln -s /opt/tomcat/bin/startup.sh /usr/local/bin/tomcatup
+              ln -s /opt/tomcat/bin/shutdown.sh /usr/local/bin/tomcatdown
+              chmod +x catalina.sh
+              tomcatup
+
+              #Healthcheck
+              #=======================================
+              rc=$?
+              sleep 15
+              status="$(curl -Is http://127.0.0.1:8080/ServerStats/Serverhealth | head -n 1 | awk '{print $2}')"
+
+              # checking for tomcat and cloudwatch service
+              if [ "$status" == 200 ] && [ "$rc" -eq 0 ]; then
+
+              # All done so signal success
+              /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource PASServerGroup --region ${AWS::Region}
+              fi
+              END=$(date +%s);
+              echo $((END-START)) | awk '{print int($1/60)":"int($1%60)}'
+  TomcatAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: customer-pas-${ParamEnvName}-tomcat-localhost-access-log
+      RetentionInDays:
+        Fn::FindInMap:
+        - Environments
+        - Ref: ParamEnvName
+        - LogRetentionInDays
+  TomcatserverLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: customer-pas-${ParamEnvName}-tomcat-localhost-log
+      RetentionInDays:
+        Fn::FindInMap:
+        - Environments
+        - Ref: ParamEnvName
+        - LogRetentionInDays
+  CatalinaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: customer-pas-${ParamEnvName}-tomcat-catalina-log
+      RetentionInDays:
+        Fn::FindInMap:
+        - Environments
+        - Ref: ParamEnvName
+        - LogRetentionInDays
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: customer-pas-${ParamEnvName}-application-log
+      RetentionInDays:
+        Fn::FindInMap:
+        - Environments
+        - Ref: ParamEnvName
+        - LogRetentionInDays
+  404MetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName:
+        Ref: TomcatAccessLogGroup
+      FilterPattern: "[ip, identity, user_id, timestamp, request, status_code = 4*,
+        size]"
+      MetricTransformations:
+      - MetricValue: '1'
+        MetricNamespace: tomcatserver/404s
+        MetricName: 400ErrorCount
+  404Alarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The number of 404s is greater than 2 over 2 minutes
+      MetricName: 400ErrorCount
+      Namespace: tomcatserver/404s
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+  Ec2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: AlbSecurityGroup
+    Properties:
+      GroupDescription: Security group applied to PAS EC2 instances
+      VpcId:
+        Ref: ParamVpc
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - "-"
+          - - tpgt
+            - Ref: ParamEnvName
+            - pas
+            - ec2secgrp
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        Description: Allow SSH from bastions 1
+        CidrIp: 10.153.2.192/26
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        Description: Allow SSH from bastions 2
+        CidrIp: 10.153.3.0/26
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        Description: Allow SSH from bastions 3
+        CidrIp: 10.153.3.64/26
+      - IpProtocol: tcp
+        FromPort: 8443
+        ToPort: 8443
+        Description: Allow HTTPS from ALB
+        SourceSecurityGroupId:
+          Fn::GetAtt:
+          - AlbSecurityGroup
+          - GroupId
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group applied to PAS application load balancer
+      VpcId:
+        Ref: ParamVpc
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - "-"
+          - - tpgt
+            - Ref: ParamEnvName
+            - pas
+            - albsecgrp
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        Description: Allow HTTPS from bastions 1
+        CidrIp: 10.153.2.192/26
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        Description: Allow HTTPS from bastions 2
+        CidrIp: 10.153.3.0/26
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        Description: Allow HTTPS from bastions 3
+        CidrIp: 10.153.3.64/26
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        Description: Allow HTTPS from Citrix 1
+        CidrIp: 10.33.20.0/23
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        Description: Allow HTTPS from Citrix 2
+        CidrIp: 10.33.19.0/23
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        Description: Allow HTTPS from Citrix 3
+        CidrIp: 10.33.212.0/23
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        Description: Allow HTTPS from MVNO 1
+        CidrIp: 172.23.41.0/24
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        Description: Allow HTTPS from MVNO 2
+        CidrIp: 172.23.42.0/24
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        Description: Allow HTTPS from MVNO 3
+        CidrIp: 172.23.44.0/24
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        Description: Allow HTTPS from MRTM
+        CidrIp: 10.45.208.4/32
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name:
+        Fn::Join:
+        - "-"
+        - - tpgt
+          - Ref: ParamEnvName
+          - pas
+          - ALB
+      Subnets:
+      - Ref: ParamPrivateSubnetIdA
+      - Ref: ParamPrivateSubnetIdB
+      SecurityGroups:
+      - Ref: AlbSecurityGroup
+      Scheme: internal
+      Type: application
+      IpAddressType: ipv4
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - "-"
+          - - tpgt
+            - Ref: ParamEnvName
+            - pas
+            - ALB
+      LoadBalancerAttributes:
+      - Key: access_logs.s3.enabled
+        Value: 'true'
+      - Key: access_logs.s3.bucket
+        Value:
+          Fn::Join:
+          - ''
+          - - mc-a
+            - Ref: AWS::AccountId
+            - "-logs-"
+            - Ref: AWS::Region
+      - Key: access_logs.s3.prefix
+        Value: aws/elbaccess
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name:
+        Fn::Join:
+        - "-"
+        - - tpgt
+          - Ref: ParamEnvName
+          - pas
+          - ALBTargetGroup
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: "/pas"
+      HealthCheckPort: 8443
+      HealthCheckProtocol: HTTPS
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      Port: 8443
+      Protocol: HTTPS
+      Matcher:
+        HttpCode: 302
+      UnhealthyThresholdCount: 5
+      TargetGroupAttributes:
+      - Key: stickiness.enabled
+        Value: 'true'
+      VpcId:
+        Ref: ParamVpc
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - "-"
+          - - tpgt
+            - Ref: ParamEnvName
+            - pas
+            - ALBTargetGroup
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: ALBTargetGroup
+      LoadBalancerArn:
+        Ref: ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-2016-08
+      Certificates:
+      - CertificateArn:
+          Ref: ParamAcmCert
+  LoadBalancerAlias:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      AliasTarget:
+        DNSName:
+          Fn::GetAtt:
+          - ApplicationLoadBalancer
+          - DNSName
+        HostedZoneId:
+          Fn::GetAtt:
+          - ApplicationLoadBalancer
+          - CanonicalHostedZoneID
+        EvaluateTargetHealth: false
+      HostedZoneId:
+        Ref: ParamHostedZone
+      Name:
+        Fn::Join:
+        - "."
+        - - web
+          - Ref: ParamEnvName
+          - npe.pas.aws.vodafone.com.au
+      Type: A
+  HTTPCodeELB5XXCountApplicationLoadBalancer:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      AlarmDescription: Alert if number number of HTTP 5XX server error codes that
+        originate from the load balancer.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: LoadBalancer
+        Value:
+          Fn::GetAtt:
+          - ApplicationLoadBalancer
+          - LoadBalancerFullName
+      EvaluationPeriods: '5'
+      InsufficientDataActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      TreatMissingData: notBreaching
+      MetricName: HTTPCode_ELB_5XX_Count
+      Namespace: AWS/ApplicationELB
+      OKActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      Period: '60'
+      Statistic: Sum
+      Threshold: '0.0'
+      Unit: Count
+  RejectedConnectionCountApplicationLoadBalancer:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      AlarmDescription: Alert if the number of connections that were rejected because
+        the load balancer had reached its maximum number of connections.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: LoadBalancer
+        Value:
+          Fn::GetAtt:
+          - ApplicationLoadBalancer
+          - LoadBalancerFullName
+      EvaluationPeriods: '5'
+      InsufficientDataActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      TreatMissingData: notBreaching
+      MetricName: RejectedConnectionCount
+      Namespace: AWS/ApplicationELB
+      OKActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      Period: '60'
+      Statistic: Sum
+      Threshold: '0.0'
+      Unit: Count
+  TargetConnectionErrorsApplicationLoadBalancerALBTargetGroup:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      AlarmDescription: Alert if number of connections were not successfully established
+        between the load balancer and the registered instances.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: LoadBalancer
+        Value:
+          Fn::GetAtt:
+          - ApplicationLoadBalancer
+          - LoadBalancerFullName
+      - Name: TargetGroup
+        Value:
+          Fn::GetAtt:
+          - ALBTargetGroup
+          - TargetGroupFullName
+      EvaluationPeriods: '5'
+      InsufficientDataActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      TreatMissingData: notBreaching
+      MetricName: TargetConnectionErrorCount
+      Namespace: AWS/ApplicationELB
+      OKActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      Period: '60'
+      Statistic: Sum
+      Threshold: '0.0'
+      Unit: Count
+  HTTPCodeTarget5XXCountApplicationLoadBalancerALBTargetGroup:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      AlarmDescription: Alert if number of HTTP 5XX response codes generated by the
+        targets.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: LoadBalancer
+        Value:
+          Fn::GetAtt:
+          - ApplicationLoadBalancer
+          - LoadBalancerFullName
+      - Name: TargetGroup
+        Value:
+          Fn::GetAtt:
+          - ALBTargetGroup
+          - TargetGroupFullName
+      EvaluationPeriods: '5'
+      InsufficientDataActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      TreatMissingData: notBreaching
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      OKActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      Period: '60'
+      Statistic: Sum
+      Threshold: '0.0'
+      Unit: Count
+  HealthyHostsApplicationLoadBalancerALBTargetGroup:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      AlarmDescription: Alert if the Application Load Balancer contains no healthy
+        instances.
+      ComparisonOperator: LessThanOrEqualToThreshold
+      Dimensions:
+      - Name: LoadBalancer
+        Value:
+          Fn::GetAtt:
+          - ApplicationLoadBalancer
+          - LoadBalancerFullName
+      - Name: TargetGroup
+        Value:
+          Fn::GetAtt:
+          - ALBTargetGroup
+          - TargetGroupFullName
+      EvaluationPeriods: '2'
+      InsufficientDataActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      MetricName: HealthyHostCount
+      Namespace: AWS/ApplicationELB
+      OKActions:
+      - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:MMS-Topic
+      Period: '60'
+      Statistic: Sum
+      Threshold: '0.0'
+      Unit: Count

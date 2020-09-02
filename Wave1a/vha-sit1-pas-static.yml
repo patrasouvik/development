@@ -1,0 +1,143 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: TPGT PAS NPE static stack. Creates an EFS filesystem and parameter.
+Parameters:
+  ParamEnvName:
+    Type: String
+    Description: Stack environment name
+    Default: sit1
+    AllowedValues:
+    - pt
+    - dev
+    - sit1
+    - sit2
+    - sit3
+    ConstraintDescription: Allowed values are pt, sit1, sit2, sit3, dev.
+  ParamVpc:
+    Type: String
+    Description: VPC ID
+    Default: vpc-0fd6d5d14dc0892d3
+  ParamKmsCmk:
+    Type: String
+    Description: KMS CMK ARN for encryption
+    Default: arn:aws:kms:ap-southeast-2:622637471932:key/d1ae1682-d708-4560-96d1-733320b440e9
+  ParamPrivateSubnetIdA:
+    Type: String
+    Description: Private subnet ID A
+    Default: subnet-066d60832f0375988
+  ParamPrivateSubnetIdB:
+    Type: String
+    Description: Private subnet ID B
+    Default: subnet-079a7b411561406b0
+  ParamPrivateSubnetCidrA:
+    Type: String
+    Description: Private subnet CIDR A
+    Default: 10.153.140.64/26
+  ParamPrivateSubnetCidrB:
+    Type: String
+    Description: Private subnet CIDR B
+    Default: 10.153.140.0/26
+Outputs:
+  EfsFileSystemId:
+    Description: EFS filesystem ID
+    Value:
+      Ref: FileSystem
+  EfsSecurityGroup:
+    Description: EFS filesystem security group
+    Value:
+      Ref: MountTargetSecurityGroup
+  ParameterEfsFilesystemId:
+    Description: Parameter store EFS parameter ID
+    Value:
+      Ref: EFSParameter
+Resources:
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      PerformanceMode: generalPurpose
+      Encrypted: true
+      KmsKeyId:
+        Ref: ParamKmsCmk
+      FileSystemTags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - "-"
+          - - tpgt
+            - Ref: ParamEnvName
+            - pas
+            - efs
+      - Key: Backup
+        Value: 'true'
+      - Key: BackupPolicy
+        Value: NONPROD_STANDARD
+      - Key: DataClassification
+        Value: Highly Sensitive
+      - Key: Application Role
+        Value: FileStorage
+  MountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: FileSystem
+      SubnetId:
+        Ref: ParamPrivateSubnetIdA
+      SecurityGroups:
+      - Ref: MountTargetSecurityGroup
+  MountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: FileSystem
+      SubnetId:
+        Ref: ParamPrivateSubnetIdB
+      SecurityGroups:
+      - Ref: MountTargetSecurityGroup
+  MountTargetSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for mount target
+      VpcId:
+        Ref: ParamVpc
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - "-"
+          - - tpgt
+            - Ref: ParamEnvName
+            - pas
+            - secgrp
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 2049
+        ToPort: 2049
+        CidrIp:
+          Ref: ParamPrivateSubnetCidrA
+      - IpProtocol: tcp
+        FromPort: 2049
+        ToPort: 2049
+        CidrIp:
+          Ref: ParamPrivateSubnetCidrB
+  EFSParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name:
+        Fn::Join:
+        - "-"
+        - - tpgt
+          - Ref: ParamEnvName
+          - pas
+          - efstarget
+      Type: String
+      Value:
+        Fn::Sub: "${FileSystem}.efs.${AWS::Region}.amazonaws.com"
+      Description: EFS target
+      Tags:
+        Name:
+          Fn::Join:
+          - "-"
+          - - tpgt
+            - Ref: ParamEnvName
+            - pas
+            - param-efstarget
