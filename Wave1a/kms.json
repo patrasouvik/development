@@ -1,0 +1,303 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Customer master key (CMK) in AWS Key Management Service.",
+  "Metadata": {
+    "RevisionDate": "23-May-2019"
+  },
+  "Parameters": {
+    "Alias": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|(?!aws/)^[a-zA-Z0-9:/_-]+$",
+      "Description": "An alias for the CMK. The alias name must not begin with aws/."
+    },
+    "EnableKeyRotation": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": ["true", "false"],
+      "Description": "Enables automatic rotation of the key material for the specified customer master key (CMK)."
+    },
+    "Description": {
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "8192",
+      "Description": "A description for the CMK."
+    },
+    "Enabled": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": ["true", "false"],
+      "Description": "True to make CMK enabled."
+    },
+    "PendingWindow": {
+      "Type": "Number",
+      "Default": 30,
+      "MinValue": 7,
+      "MaxValue": 30,
+      "Description": "The number of days in the waiting period before AWS KMS deletes the CMK."
+    },
+    "IAMPrincipalsRequiringDecryptPermissions": {
+      "Type": "CommaDelimitedList",
+      "Default": "",
+      "Description": "List of IAM ARNs which require permission to decrypt using the CMK; for example arn:aws:iam::123456789012:role/myrole or arn:aws:iam::123456789012:user/myuser."
+    },
+    "IAMPrincipalsRequiringEncryptPermissions": {
+      "Type": "CommaDelimitedList",
+      "Default": "",
+      "Description": "List of IAM ARNs which require permission to encrypt using the CMK; for example arn:aws:iam::123456789012:role/myrole or arn:aws:iam::123456789012:user/myuser."
+    },
+    "IAMPrincipalsRequiringGrantsPermissions": {
+      "Type": "CommaDelimitedList",
+      "Default": "",
+      "Description": "List of IAM ARNs or account IDs to use this CMK for key grants; for example arn:aws:iam::123456789012:role/myrole or 123456789012."
+    },
+    "LimitGrantsToAWSResources": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": ["true", "false"],
+      "Description": "True to only allow AWS services that is integrated with AWS KMS perform the grant operation on the user's behalf."
+    },
+    "EnforceEncryptionContextKeys": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": ["true", "false"],
+      "Description": "True to enforce encryption context keys in cryptographic operations. To define the encryption context keys use AllowedEncryptionContextKeys."
+    },
+    "AllowedEncryptionContextKeys": {
+      "Type": "CommaDelimitedList",
+      "Default": "",
+      "Description": "List of encryption context keys that must be present in requests for cryptographic operations. If supplied all cryptographic operations must have one of the context keys from this list."
+    },
+    "AllowServiceRolesAccessKMSKeys": {
+      "Type": "CommaDelimitedList",
+      "Default": "",
+      "Description": "Provides KMS key access to AWS services, this allows AWS services to use the CMK with limited permissions. Format: ec2.us-east-1.amazonaws.com"
+    }
+  },
+  "Conditions": {
+    "HasAllowedEncryptionContextKeys": { "Fn::Not": [{ "Fn::Equals": [{ "Fn::Join": [ "", { "Ref": "AllowedEncryptionContextKeys" }]}, "" ]}]},
+    "HasAlias": { "Fn::Not": [{ "Fn::Equals": [{ "Ref": "Alias" }, "" ]}]},
+    "HasIAMPrincipalsRequiringGrantsPermissions": { "Fn::Not": [{ "Fn::Equals": [{ "Fn::Join": [ "", { "Ref": "IAMPrincipalsRequiringGrantsPermissions" }]}, "" ]}]},
+    "HasIAMPrincipalsRequiringDecryptPermissions": { "Fn::Not": [{ "Fn::Equals": [{ "Fn::Join": [ "", { "Ref": "IAMPrincipalsRequiringDecryptPermissions" }]}, "" ]}]},
+    "HasIAMPrincipalsRequiringEncryptPermissions": { "Fn::Not": [{ "Fn::Equals": [{ "Fn::Join": [ "", { "Ref": "IAMPrincipalsRequiringEncryptPermissions" }]}, "" ]}]},
+    "IsLimitGrantsToAWSResources": { "Fn::Equals": [{ "Ref": "LimitGrantsToAWSResources" }, "true" ]},
+    "IsEnforceEncryptionContextKeys": { "Fn::Equals": [{ "Ref": "EnforceEncryptionContextKeys" }, "true" ]},
+    "HasAllowServiceRolesAccessKMSKeys": { "Fn::Not": [{ "Fn::Equals": [{ "Fn::Join": [ "", { "Ref": "AllowServiceRolesAccessKMSKeys" }]}, "" ]}]}
+  },
+  "Mappings": {
+    "AmsChangeManagement": {
+      "ChangeType": {
+        "Id": "ct-1d84keiri1jhg",
+        "Version": "1.0"
+      }
+    }
+  },
+  "Resources": {
+    "Key": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "Description": { "Ref": "Description" },
+        "EnableKeyRotation": { "Ref": "EnableKeyRotation" },
+        "Enabled": { "Ref": "Enabled" },
+        "KeyPolicy":  {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": { "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"}},
+              "NotAction": [
+                "kms:ScheduleKeyDeletion",
+                "kms:DeleteImportedKeyMaterial"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Fn::If": [
+                "IsEnforceEncryptionContextKeys",
+                {
+                  "Effect": "Deny",
+                  "Principal": { "AWS": "*" },
+                  "Action": [
+                    "kms:CreateGrant",
+                    "kms:Decrypt",
+                    "kms:Encrypt",
+                    "kms:GenerateDataKey*",
+                    "kms:ReEncrypt"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "Null": {
+                      "kms:EncryptionContextKeys": true
+                    }
+                  }
+                },
+                { "Ref": "AWS::NoValue" }
+              ]
+            },
+            {
+              "Fn::If": [
+                "HasAllowedEncryptionContextKeys",
+                {
+                  "Effect": "Deny",
+                  "Principal": { "AWS": "*" },
+                  "Action": [
+                    "kms:CreateGrant",
+                    "kms:Decrypt",
+                    "kms:Encrypt",
+                    "kms:GenerateDataKey*",
+                    "kms:ReEncrypt"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:EncryptionContextKeys": { "Ref": "AllowedEncryptionContextKeys" }
+                    }
+                  }
+                },
+                { "Ref": "AWS::NoValue" }
+              ]
+            },
+            {
+              "Fn::If": [
+                "HasIAMPrincipalsRequiringDecryptPermissions",
+                {
+                  "Sid": "Allow decrypt using the key",
+                  "Effect": "Allow",
+                  "Principal": { "AWS": { "Ref": "IAMPrincipalsRequiringDecryptPermissions" }},
+                  "Action": [
+                    "kms:DescribeKey",
+                    "kms:Decrypt"
+                  ],
+                  "Resource": "*"
+                },
+                { "Ref": "AWS::NoValue" }
+              ]
+            },
+            {
+              "Fn::If": [
+                "HasIAMPrincipalsRequiringEncryptPermissions",
+                {
+                  "Sid": "Allow encrypt using the key",
+                  "Effect": "Allow",
+                  "Principal": { "AWS": { "Ref": "IAMPrincipalsRequiringEncryptPermissions" }},
+                  "Action": [
+                    "kms:DescribeKey",
+                    "kms:Encrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey",
+                    "kms:GenerateDataKeyWithoutPlaintext"
+                  ],
+                  "Resource": "*"
+                },
+                { "Ref": "AWS::NoValue" }
+              ]
+            },
+            {
+              "Fn::If": [
+                "HasIAMPrincipalsRequiringGrantsPermissions",
+                {
+                  "Sid": "Allow grants",
+                  "Effect": "Allow",
+                  "Principal": {
+                    "AWS": { "Ref": "IAMPrincipalsRequiringGrantsPermissions" }
+                  },
+                  "Action": [
+                    "kms:CreateGrant",
+                    "kms:ListGrants",
+                    "kms:RevokeGrant"
+                  ],
+                  "Resource": "*"
+                },
+                { "Ref": "AWS::NoValue" }
+              ]
+            },
+            {
+              "Fn::If": [
+                "HasAllowServiceRolesAccessKMSKeys",
+                {
+                  "Sid": "Allows AWS services to use this key for encrypt/decrypt/grant purposes",
+                  "Effect": "Allow",
+                  "Principal": { "AWS": "*" },
+                  "Action": [
+                    "kms:ListGrants",
+                    "kms:CreateGrant",
+                    "kms:DescribeKey",
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": { "Ref": "AllowServiceRolesAccessKMSKeys"},
+                      "kms:CallerAccount": { "Fn::Sub": "${AWS::AccountId}" }
+                    }
+                  } 
+                },
+                { "Ref": "AWS::NoValue" }
+              ]
+            },
+            {
+              "Fn::If": [
+                "IsLimitGrantsToAWSResources",
+                {
+                  "Sid": "Deny if grant is not for AWS resource",
+                  "Effect": "Deny",
+                  "Principal": { "AWS": "*" },
+                  "Action": [
+                    "kms:CreateGrant",
+                    "kms:ListGrants",
+                    "kms:RevokeGrant"
+                  ],
+                  "Resource": "*",
+                  "Condition": {"Bool": {"kms:GrantIsForAWSResource": false}}
+                },
+                { "Ref": "AWS::NoValue" }
+              ]
+            }
+          ]
+        },
+        "PendingWindowInDays": { "Ref": "PendingWindow" },
+        "Tags": [
+          {
+            "Key": "ams:change-type",
+            "Value": {
+              "Fn::Sub": [
+                "id=${ChangeTypeId}:version=${ChangeTypeVersion}",
+                {
+                  "ChangeTypeId": { "Fn::FindInMap": [ "AmsChangeManagement", "ChangeType", "Id" ]},
+                  "ChangeTypeVersion": { "Fn::FindInMap": [ "AmsChangeManagement", "ChangeType", "Version" ]}
+                }
+              ]
+            }
+          },
+          {
+            "Key": "ams:stack-id",
+            "Value": { "Ref": "AWS::StackName" }
+          }
+        ]
+      }
+    },
+    "KeyAlias": {
+      "Condition": "HasAlias",
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": { "Fn::Sub": "alias/${Alias}" },
+        "TargetKeyId": { "Ref": "Key" }
+      }
+    }
+  },
+  "Outputs": {
+    "KeyId": {
+      "Description": "Customer master key Id.",
+      "Value": { "Ref": "Key" }
+    },
+    "KeyARN": {
+      "Description": "Customer master key ARN.",
+      "Value": { "Fn::GetAtt": [ "Key", "Arn" ]}
+    }
+  }
+}

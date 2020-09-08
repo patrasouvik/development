@@ -1,0 +1,124 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "tpgt-sit1-pas-application-policy",
+  "Resources": {
+    "Policy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "ManagedPolicyName": "tpgt-sit1-pas-application-policy",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "ParameterStore",
+              "Effect": "Allow",
+              "Action": [
+                "ssm:GetParameter",
+                "ssm:GetParameters",
+                "ssm:PutParameter"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tpgt-sit1-*"
+              }
+            },
+            {
+              "Sid": "EC2DecryptCMKPermission",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/d1ae1682-d708-4560-96d1-733320b440e9"
+              }
+            },
+            {
+              "Sid": "S3ListBucket",
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket"
+              ],
+              "Resource": [
+                "arn:aws:s3:::tpgt-sit1-pas-s3*"
+              ]
+            },
+            {
+              "Sid": "S3GetObject",
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject"
+              ],
+              "Resource": [
+                "arn:aws:s3:::tpgt-sit1-pas-s3*/*"
+              ]
+            },
+            {
+              "Sid": "ELBDescribe",
+              "Effect": "Allow",
+              "Action": "elasticloadbalancing:Describe*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "EC2Describe",
+              "Effect": "Allow",
+              "Action": [
+                "ec2:DescribeInstances",
+                "ec2:DescribeClassicLinkInstances",
+                "ec2:DescribeSecurityGroups"
+              ],
+              "Resource": "*"
+            },
+            {
+                "Sid": "ManageCloudWatchMetric",
+                "Action": [
+                    "cloudwatch:PutMetricData"
+                ],
+	        "Resource": "*",
+	        "Condition": {
+                    "ForAllValues:StringNotEquals": {
+                        "cloudwatch:namespace": [
+                            "ManagedCloud",
+                            "AMS/*"
+                        ]
+                    }
+                },
+                "Effect": "Allow"
+            },
+            {
+              "Sid": "CloudWatchBase",
+              "Action": [
+                "ec2:DescribeTags",
+                "ec2:DescribeVolumes",
+                "logs:DescribeLogGroups",
+                "logs:DescribeLogStreams"
+              ],
+              "Resource": "*",
+              "Effect": "Allow"
+            },
+            {
+              "Sid": "CloudWatchLogs",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:customer-pas-sit1*"
+              },
+              "Effect": "Allow"
+            },
+            {
+              "Sid": "CloudWatchParam",
+              "Action": [
+                "ssm:GetParameter"
+              ],
+              "Resource": {
+               "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/AmazonCloudWatch-*"
+              },
+              "Effect": "Allow"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "tpgt-npe-isp-rds-dbexport-role",
+  "Resources": {
+    "Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "RoleName": "tpgt-npe-isp-rds-dbexport-role",
+        "Path": "/",
+        "Tags": [
+          {
+            "Key": "UID",
+            "Value": "U0002"
+          },
+          {
+            "Key": "WID",
+            "Value": "U0002-1"
+          }
+        ],
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:policy/tpgt-npe-isp-rds-dbexport-policy"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "tpgt-sit1-pas-application-role",
+  "Resources": {
+    "Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Path": "/",
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:policy/AMSInstanceProfileS3WritePolicy"
+          },
+          {
+            "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:policy/AMSInstanceProfileMonitoringPolicy"
+          },
+          {
+            "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:policy/AMSInstanceProfileLoggingPolicy"
+          },
+          {
+            "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:policy/AMSInstanceProfileManagementPolicy"
+          },
+          {
+            "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:policy/AMSInstanceProfilePatchPolicy"
+          },
+          {
+            "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:policy/tpgt-sit1-pas-application-policy"
+          }
+        ],
+        "RoleName": "tpgt-sit1-pas-application-role",
+        "Tags": [
+          {
+            "Key": "UID",
+            "Value": "U0001"
+          },
+          {
+            "Key": "WID",
+            "Value": "U0001-1"
+          }
+        ]
+      }
+    },
+    "TPGInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": "tpgt-sit1-pas-application-role",
+        "Path": "/",
+        "Roles": [
+          {
+            "Ref": "Role"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "PASWS ACM Stack",
+    "Parameters": {
+        "EnvName": {
+            "Type": "String",
+            "Description": "Application environment",
+            "Default": "sit",
+            "AllowedValues": [
+                "prod",
+                "pt",
+                "sit"
+            ],
+            "ConstraintDescription": "Allowed values are prod, pt, sit."
+        }
+    },
+    "Resources": {
+        "ACMCertificate": {
+            "Type": "AWS::CertificateManager::Certificate",
+            "Properties": {
+                "DomainName": "mnp-pas-sit1.vodafone.com.au",
+                "DomainValidationOptions": [
+                    {
+                        "DomainName": "mnp-pas-sit1.vodafone.com.au",
+                        "ValidationDomain": "vodafone.com.au"
+                    },
+                    {
+                        "DomainName": "mnp-pas-sit1.dc.vodafone.com.au",
+                        "ValidationDomain": "vodafone.com.au"
+                    },
+                    {
+                        "DomainName": "web.sit1.npe.pas.aws.vodafone.com.au",
+                        "ValidationDomain": "vodafone.com.au"
+                    },
+                    {
+                        "DomainName": "mnp-pas-sit2.vodafone.com.au",
+                        "ValidationDomain": "vodafone.com.au"
+                    },
+                    {
+                        "DomainName": "mnp-pas-sit2.dc.vodafone.com.au",
+                        "ValidationDomain": "vodafone.com.au"
+                    },
+                    {
+                        "DomainName": "web.sit2.npe.pas.aws.vodafone.com.au",
+                        "ValidationDomain": "vodafone.com.au"
+                    },
+                    {
+                        "DomainName": "mnp-pas-sit3.vodafone.com.au",
+                        "ValidationDomain": "vodafone.com.au"
+                    },
+                    {
+                        "DomainName": "mnp-pas-sit3.dc.vodafone.com.au",
+                        "ValidationDomain": "vodafone.com.au"
+                    },
+                    {
+                        "DomainName": "web.sit3.npe.pas.aws.vodafone.com.au",
+                        "ValidationDomain": "vodafone.com.au"
+                    }
+                ],
+                "SubjectAlternativeNames": [
+                    "mnp-pas-sit1.vodafone.com.au",
+                    "mnp-pas-sit1.dc.vodafone.com.au",
+                    "web.sit1.npe.pas.aws.vodafone.com.au",
+                    "mnp-pas-sit2.vodafone.com.au",
+                    "mnp-pas-sit2.dc.vodafone.com.au",
+                    "web.sit2.npe.pas.aws.vodafone.com.au",
+                    "mnp-pas-sit3.vodafone.com.au",
+                    "mnp-pas-sit3.dc.vodafone.com.au",
+                    "web.sit3.npe.pas.aws.vodafone.com.au"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    "tpgt",
+                                    {
+                                        "Ref": "EnvName"
+                                    },
+                                    "pasws",
+                                    "cert"
+                                ]
+                            ]
+                        }
+                    }
+                ],
+                "ValidationMethod": "EMAIL"
+            }
+        }
+    }
+}

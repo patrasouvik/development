@@ -1,0 +1,42 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "tpgt-npe-isp-rds-monitoring-policy",
+  "Resources": {
+     "Policy": {
+        "Type": "AWS::IAM::ManagedPolicy",
+        "Properties": {
+           "ManagedPolicyName": "tpgt-npe-isp-rds-monitoring-policy",
+           "Path": "/",
+           "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                 {
+                    "Sid": "EnableCreationAndManagementOfRDSCloudwatchLogGroups",
+                    "Effect": "Allow",
+                    "Action": [
+                       "logs:CreateLogGroup",
+                       "logs:PutRetentionPolicy"
+                    ],
+                    "Resource": [
+                       "arn:aws:logs:*:122323083353:log-group:RDS*"
+                    ]
+                  },
+                  {
+                    "Sid": "EnableCreationAndManagementOfRDSCloudwatchLogStreams",
+                    "Effect": "Allow",
+                    "Action": [
+                       "logs:CreateLogStream",
+                       "logs:PutLogEvents",
+                       "logs:DescribeLogStreams",
+                       "logs:GetLogEvents"
+                    ],
+                    "Resource": [
+                       "arn:aws:logs:*:122323083353:log-group:RDS*:log-stream:*"
+                    ]
+                  }
+              ]
+           }
+        }
+     }
+  }
+}
