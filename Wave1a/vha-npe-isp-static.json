@@ -1,0 +1,297 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TPGT ISP NPE static stack. Creates RDS and parameter",
+  "Parameters": {
+    "ParamEnvName": {
+      "Type": "String",
+      "Description": "Stack environment name",
+      "Default": "npe",
+      "AllowedValues": [
+        "prod",
+        "npe"
+      ],
+      "ConstraintDescription": "Allowed values are prod,npe"
+    },
+    "ParamVpc": {
+      "Type": "String",
+      "Description": "VPC ID",
+      "Default": "vpc-06f6a1f974f31cbe3"
+    },
+    "ParamKmsCmk": {
+      "Type": "String",
+      "Description": "KMS CMK ARN for encryption",
+      "Default": "arn:aws:kms:ap-southeast-2:122323083353:key/88d34f67-2061-4f79-ad8a-13fecafab080"
+    },
+    "ParamPrivateSubnetIdA": {
+      "Type": "String",
+      "Description": "Private subnet ID A",
+      "Default": "subnet-0a58d1bb3fc896325"
+    },
+    "ParamPrivateSubnetIdB": {
+      "Type": "String",
+      "Description": "Private subnet ID B",
+      "Default": "subnet-0b3092980dabe07b5"
+    },
+    "ParamPrivateSubnetCidrA": {
+      "Type": "String",
+      "Description": "Private subnet CIDR A",
+      "Default": "10.153.140.128/26"
+    },
+    "ParamPrivateSubnetCidrB": {
+      "Type": "String",
+      "Description": "Private subnet CIDR B",
+      "Default": "10.153.140.192/26"
+    },
+	"ParamReportSecurityGroup": {
+      "Type": "String",
+      "Description": "Isp ReportingserverSecurityGroup",
+      "Default": "sg-06c9e237c93a9e2d9"
+    },
+	"ParamCentralSecurityGroup": {
+      "Type": "String",
+      "Description": "Isp CentralserverSecurityGroup",
+      "Default": "sg-0248a5015ea8b2e57"
+    },
+	"ParamJumpserverSecurityGroup": {
+      "Type": "String",
+      "Description": "Jump server CIDR range",
+      "Default": "10.33.16.75/32"
+    },
+	"ParamHostedZone": {
+      "Type": "String",
+      "Description": "Route 53 zone ID",
+      "Default": "Z056892730LLEQQ8CL2ZK"
+    }	
+  },
+  "Resources": {
+    "MyDBInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBName": "ORCL",
+        "AllocatedStorage": 20,
+        "DBInstanceClass": "db.t3.medium",
+        "Engine": "oracle-ee",
+        "EngineVersion": "19.0.0.0.ru-2020-04.rur-2020-04.r1",
+        "CharacterSetName": "WE8MSWIN1252",
+        "LicenseModel": "bring-your-own-license",
+        "AssociatedRoles": [
+          {
+            "FeatureName": "S3_INTEGRATION",
+            "RoleArn": "arn:aws:iam::122323083353:role/tpgt-npe-isp-rds-dbexport-role"
+          }
+        ],
+        "StorageType": "gp2",
+        "StorageEncrypted": true,
+        "KmsKeyId": "arn:aws:kms:ap-southeast-2:122323083353:key/88d34f67-2061-4f79-ad8a-13fecafab080",
+        "MasterUsername": "{{resolve:ssm:tpgt-npe-ispmal-dbuser:1}}",
+        "MasterUserPassword": "{{resolve:ssm-secure:tpgt-npe-isp-dbpass:1}}",
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "16:00-17:00",
+        "PreferredMaintenanceWindow": "Sun:13:00-Sun:15:00",
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsRetentionPeriod": 7,
+        "EnableCloudwatchLogsExports": [
+          "audit",
+          "listener",
+          "alert"
+        ],
+		"CopyTagsToSnapshot": true,
+		"MonitoringInterval": 60,
+        "MonitoringRoleArn": "arn:aws:iam::122323083353:role/tpgt-npe-isp-rds-monitoring-role",
+        "AutoMinorVersionUpgrade": false,
+        "DBInstanceIdentifier": "ISPMalware-rds-instance",
+        "PubliclyAccessible": false,
+        "MultiAZ": false,
+        "DBSubnetGroupName": {
+		  "Ref": "RDSISPDBSubnetGroup"
+		},
+        "VPCSecurityGroups": [ { "Fn::GetAtt": [ "RDSSecurityGroup", "GroupId" ] } ],
+        "OptionGroupName": {
+		  "Ref": "RDSISPDBOptionGroup"
+		},  
+        "DBParameterGroupName": {
+		  "Ref": "MyRDSParamGroup"
+		},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "tpgt",
+                  {
+                    "Ref": "ParamEnvName"
+                  },
+                  "isp",
+                  "rds"
+                ]
+              ]
+			  
+            }
+		  },
+		  {
+            "Key": "Backup",
+            "Value": "true"
+          },
+		  {
+            "Key": "BackupPolicy",
+            "Value": "NONPROD_STANDARD"
+          }
+          
+        ]
+      }
+    },
+    "RDSISPDBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Description",
+        "DBSubnetGroupName": "RDS_ISP_DB_Subnet",
+        "SubnetIds": [
+          {
+            "Ref": "ParamPrivateSubnetIdA"
+          },
+          {
+            "Ref": "ParamPrivateSubnetIdB"
+          }
+        ]
+      }
+    },
+    "RDSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for RDS",
+        "VpcId": {
+          "Ref": "ParamVpc"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "tpgt",
+                  {
+                    "Ref": "ParamEnvName"
+                  },
+                  "isp",
+                  "secgrp"
+                ]
+              ]
+            }
+          }
+        ],
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 2521,
+            "ToPort": 2521,
+            "SourceSecurityGroupId": {
+              "Ref": "ParamCentralSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 2521,
+            "ToPort": 2521,
+            "SourceSecurityGroupId": {
+              "Ref": "ParamReportSecurityGroup"
+            }
+          },
+		  {
+            "IpProtocol": "tcp",
+            "FromPort": 2521,
+            "ToPort": 2521,
+            "CidrIp": {
+              "Ref": "ParamJumpserverSecurityGroup"
+            }
+          }
+        ]
+      }
+    },
+    "RDSISPDBOptionGroup": {
+      "Type": "AWS::RDS::OptionGroup",
+      "Properties": {
+        "EngineName": "oracle-ee",
+        "MajorEngineVersion": "19",
+        "OptionGroupDescription": "Oracle DB Instance Option Group for S3 Integration",
+        "OptionConfigurations": [
+          {
+            "OptionName": "S3_INTEGRATION",
+            "OptionVersion": "1.0"
+          },
+          {
+            "OptionName": "SSL",
+            "OptionSettings": [
+              {
+                "Name": "SQLNET.SSL_VERSION",
+                "Value": "1.2 or 1.0"
+              }
+            ],
+            "VpcSecurityGroupMemberships": [
+			  {
+			    "Ref": "RDSSecurityGroup"
+			  }
+			],
+            "Port": 2521
+          }
+        ]
+      }
+    },
+    "MyRDSParamGroup": {
+      "Type": "AWS::RDS::DBParameterGroup",
+      "Properties": {
+        "Family": "oracle-ee-19",
+        "Description": "CloudFormation Database Parameter Group",
+        "Parameters": {
+          "audit_trail": "XML, EXTENDED"
+        }
+      }
+    },
+    "RDSAlias": {
+            "Type": "AWS::Route53::RecordSet",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "ParamHostedZone"
+                },
+                "Name": {
+                    "Fn::Join": [
+                        ".",
+                        [
+                            "database",
+                            {
+                                "Ref": "ParamEnvName"
+                            },
+                            "ispmalware.aws.vodafone.com.au"
+                        ]
+                    ]
+                },
+                "Type": "CNAME",
+                "TTL": "300",
+                "ResourceRecords": [
+                    {
+                        "Fn::GetAtt": [
+                            "MyDBInstance",
+                            "Endpoint.Address"
+                        ]
+                    }
+                ]
+            }
+		}
+    },  
+  "Outputs": {
+    "RDSName": {
+      "Description": "Oracle RDS Instance",
+      "Value": {
+        "Ref": "MyDBInstance"
+      }
+    },
+    "RDSSecurityGroup": {
+      "Description": "RDS security group",
+      "Value": {
+        "Ref": "RDSSecurityGroup"
+      }
+    }
+  }
+}

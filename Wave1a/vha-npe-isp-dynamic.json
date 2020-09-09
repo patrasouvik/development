@@ -1,0 +1,1153 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TPGT ISP NPE dynamic stack. Creates an NLB,ASG,CW Log Groups and Security Groups.",
+  "Parameters": {
+     "ParamEnvName": {
+        "Type": "String",
+        "Description": "Stack environment name",
+        "Default": "npe",
+        "AllowedValues": [
+           "prod",
+           "npe"
+        ],
+        "ConstraintDescription": "Allowed values are prod,npe."
+     },
+     "ParamVpc": {
+        "Type": "String",
+        "Description": "VPC ID",
+        "Default": "vpc-06f6a1f974f31cbe3"
+     },
+     "ParamKmsCmk": {
+        "Type": "String",
+        "Description": "KMS CMK ARN for encryption",
+        "Default": "arn:aws:kms:ap-southeast-2:122323083353:key/88d34f67-2061-4f79-ad8a-13fecafab080"
+     },
+     "ParamPrivateSubnetIdA": {
+        "Type": "String",
+        "Description": "Private subnet ID A",
+        "Default": "subnet-0a58d1bb3fc896325"
+     },
+     "ParamPrivateSubnetIdB": {
+        "Type": "String",
+        "Description": "Private subnet ID B",
+        "Default": "subnet-0b3092980dabe07b5"
+     },
+     "ParamAcmCert": {
+        "Type": "String",
+        "Description": "ACM certificate ARN for load balancers",
+        "Default": "arn:aws:acm:ap-southeast-2:122323083353:certificate/61e2383a-fa0f-4e6e-937d-2898da84fcf3"
+     },
+     "ParamEc2IamProfile": {
+        "Type": "String",
+        "Description": "IAM instance profile to use for ASGs",
+        "Default": "arn:aws:iam::122323083353:instance-profile/tpgt-npe-isp-application-role"
+     },
+     "ParamImageId": {
+        "Type": "AWS::EC2::Image::Id",
+        "Description": "AMS Amazon Linux 2 base image AMI-ID",
+        "Default": "ami-060735c9d533aba4c"
+     },
+     "ParamHostedZone": {
+        "Type": "String",
+        "Description": "Route 53 zone ID",
+        "Default": "Z056892730LLEQQ8CL2ZK"
+     }
+  },
+  "Mappings": {
+     "Environments": {
+        "pt": {
+           "ASMAX": 4,
+           "ASMIN": 2,
+           "LogRetentionInDays": 60,
+           "VolumeSize": 50,
+           "InstanceType": "t2.medium",
+           "AZ1Subnet": "10.153.140.128/26",
+           "AZ2Subnet": "10.153.140.192/26"
+        },
+        "npe": {
+           "ASMAX": 2,
+           "ASMIN": 1,
+           "LogRetentionInDays": 7,
+           "VolumeSize": 30,
+           "InstanceType": "t2.medium",
+           "AZ1Subnet": "10.153.140.128/26",
+           "AZ2Subnet": "10.153.140.192/26"
+        }
+     }
+  },
+  "Resources": {
+     "ISPCentralServerGroup": {
+        "Type": "AWS::AutoScaling::AutoScalingGroup",
+        "CreationPolicy": {
+           "ResourceSignal": {
+              "Timeout": "PT15M",
+              "Count": {
+                 "Fn::FindInMap": [
+                    "Environments",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "ASMIN"
+                 ]
+              }
+           }
+        },
+        "UpdatePolicy": {
+           "AutoScalingRollingUpdate": {
+              "MaxBatchSize": 1,
+              "MinInstancesInService": 1,
+              "PauseTime": "PT15M",
+              "WaitOnResourceSignals": true
+           }
+        },
+        "Properties": {
+           "VPCZoneIdentifier": [
+              {
+                 "Ref": "ParamPrivateSubnetIdA"
+              },
+              {
+                 "Ref": "ParamPrivateSubnetIdB"
+              }
+           ],
+           "HealthCheckGracePeriod": 300,
+           "HealthCheckType": "EC2",
+           "LaunchTemplate": {
+              "LaunchTemplateId": {
+                 "Ref": "CentralLaunchTemplate"
+              },
+              "Version": {
+                 "Fn::GetAtt": [
+                    "CentralLaunchTemplate",
+                    "LatestVersionNumber"
+                 ]
+              }
+           },
+           "MinSize": {
+              "Fn::FindInMap": [
+                 "Environments",
+                 {
+                    "Ref": "ParamEnvName"
+                 },
+                 "ASMIN"
+              ]
+           },
+           "MaxSize": {
+              "Fn::FindInMap": [
+                 "Environments",
+                 {
+                    "Ref": "ParamEnvName"
+                 },
+                 "ASMAX"
+              ]
+           },
+           "TargetGroupARNs": [
+              {
+                 "Ref": "CentralserverNLBTargetGroup"
+              }
+           ],
+           "Tags": [
+              {
+                 "Key": "Name",
+                 "Value": {
+                    "Fn::Join": [
+                       "-",
+                       [
+                          "tpgt",
+                          {
+                             "Ref": "ParamEnvName"
+                          },
+                          "isp",
+                          "ec2-centralserver"
+                       ]
+                    ]
+                 },
+                 "PropagateAtLaunch": true
+              },
+              {
+                 "Key": "Backup",
+                 "Value": "false",
+                 "PropagateAtLaunch": true
+              },
+              {
+                 "Key": "DataClassification",
+                 "Value": "Highly Sensitive",
+                 "PropagateAtLaunch": true
+              },
+              {
+                 "Key": "Role",
+                 "Value": "CentralServer",
+                 "PropagateAtLaunch": true
+              }
+           ]
+        }
+     },
+     "CentralLaunchTemplate": {
+        "Type": "AWS::EC2::LaunchTemplate",
+        "Properties": {
+           "LaunchTemplateName": {
+              "Fn::Join": [
+                 "-",
+                 [
+                    "tpgt-central",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "isp",
+                    "launchtemplate"
+                 ]
+              ]
+           },
+           "LaunchTemplateData": {
+              "ImageId": {
+                 "Ref": "ParamImageId"
+              },
+              "InstanceType": {
+                 "Fn::FindInMap": [
+                    "Environments",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "InstanceType"
+                 ]
+              },
+              "IamInstanceProfile": {
+                 "Arn": {
+                    "Ref": "ParamEc2IamProfile"
+                 }
+              },
+              "NetworkInterfaces": [
+                 {
+                    "DeviceIndex": 0,
+                    "AssociatePublicIpAddress": false,
+                    "DeleteOnTermination": true,
+                    "Groups": [
+                       {
+                          "Ref": "Ec2CentralSecurityGroup"
+                       }
+                    ]
+                 }
+              ],
+              "TagSpecifications": [
+                 {
+                    "ResourceType": "instance",
+                    "Tags": [
+                       {
+                          "Key": "Name",
+                          "Value": {
+                             "Fn::Join": [
+                                "-",
+                                [
+                                   "tpgt",
+                                   {
+                                      "Ref": "ParamEnvName"
+                                   },
+                                   "isp",
+                                   "Launchtemplate-centralserver"
+                                ]
+                             ]
+                          }
+                       }
+                    ]
+                 }
+              ],
+              "BlockDeviceMappings": [
+                 {
+                    "DeviceName": "/dev/xvda",
+                    "Ebs": {
+                       "VolumeSize": {
+                          "Fn::FindInMap": [
+                             "Environments",
+                             {
+                                "Ref": "ParamEnvName"
+                             },
+                             "VolumeSize"
+                          ]
+                       },
+                       "VolumeType": "gp2",
+                       "DeleteOnTermination": true,
+                       "Encrypted": true,
+                       "KmsKeyId": {
+                          "Ref": "ParamKmsCmk"
+                       }
+                    }
+                 }
+              ],
+              "UserData": {
+                 "Fn::Base64": {
+                    "Fn::Sub": "#!/bin/bash -xe\nSTART=$(date +%s);\n\n# Set Secured Variables\n#============================\n\n# Get DB Credentials and store in Shell env variables utilized by ISP application ./bin/setenv.sh script\nexport ENV_USER=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-ispmal-dbuser --query \"Parameters[].{Val:Value}\" --output text)\nexport ENV_PASS=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-dbpass --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\nexport NESSUS_KEY=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-nessuskey --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\n# Enable console logging now that sensitive values have been retrieved\nexec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\n\n# Get the latest CloudFormation package\nyum update -y aws-cfn-bootstrap\n\n#Cloudwatch configuration\n#============================\ncat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json <<EOL\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/auth\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/auth\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/user-data.log\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/user-data.log\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/access_log*.txt\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-central-access-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log*.log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-central-error-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/vha/ispmal/logs/ispm_log_server*.log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-central-ispm-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          }\n        ]\n      }\n    }\n  }\n}\n\nEOL\nsudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a append-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json\n\n#Splunk Installation\n#============================\ncd ~/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/splunkforwarder-8.0.5-Linux-x86_64.tgz /opt/ && cd /opt\ntar -xvzf splunkforwarder-8.0.5-Linux-x86_64.tgz\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/isp-np-splunk-config.zip /opt/ && unzip isp-np-splunk-config.zip\ncd isp-np-splunk-config/ && cp -rp vha_all_deploymentclient vha_isp_uf_config /opt/splunkforwarder/etc/apps\nsudo /opt/splunkforwarder/bin/splunk start --accept-license --answer-yes --no-prompt --seed-passwd mypassword\n\n#Taneble agent installation\n#=============================\ncd ~/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/NessusAgent-8.0.0-amzn.x86_64.rpm .\nsudo yum -y install NessusAgent-8.0.0-amzn.x86_64.rpm\n\n# Hide Nessus key value in sub-script\ncat >nessusStart.sh <<EOL\n#!/bin/bash\n/opt/nessus_agent/sbin/nessuscli agent link --key=\"$NESSUS_KEY\" --host=cloud.tenable.com --port=443\n\nEOL\nchmod +x nessusStart.sh\n./nessusStart.sh\n\n/sbin/service nessusagent start\n\n#FireEye installation\n#============================\ncd ~/\nmkdir -p /opt/fireeye\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/IMAGE_HX_AGENT_LINUX_30.19.6.tgz IMAGE_HX_AGENT_LINUX_30.19.6.tgz\ntar -xvzf IMAGE_HX_AGENT_LINUX_30.19.6.tgz\nmv xagt-30.19.6-1.el7.x86_64.rpm agent_config.json /opt/fireeye && cd /opt/fireeye/\nsudo yum -y install xagt-30.19.6-1.el7.x86_64.rpm\nsudo /opt/fireeye/bin/xagt -i /opt/fireeye/agent_config.json\nsudo systemctl start xagt && sudo systemctl enable xagt\n\n#Application Installation\n#=======================================\ncd / \namazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2\nyum install -y httpd mariadb-server php-gd.x86_64 php-devel.x86_64\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-basic-linux.x64-19.8.0.0.0dbru.zip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip  \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/Central_Server.zip Central_Server.zip \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/php.ini php.ini \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sqlnet.ora sqlnet.ora \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/tnsnames.ora tnsnames.ora \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso.lck cwallet.sso.lck \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/rds-ca-2019-root.pem rds-ca-2019-root.pem \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso cwallet.sso \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/get_isaac_file.sh get_isaac_file.sh\ncd /opt\nmkdir oracle\ncd oracle\ncd ../../\ncp instantclient-basic-linux.x64-19.8.0.0.0dbru.zip /opt/oracle/\ncp instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip  /opt/oracle/\ncd /opt/oracle\nunzip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip\nunzip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip\nldconfig\ncd instantclient_19_8\nmkdir ssl_wallet\ncd ../../../\ncp sqlnet.ora  /opt/oracle/instantclient_19_8/network/admin/\ncp tnsnames.ora /opt/oracle/instantclient_19_8/network/admin/\ncp cwallet.sso.lck /opt/oracle/instantclient_19_8/ssl_wallet\ncp rds-ca-2019-root.pem /opt/oracle/instantclient_19_8/ssl_wallet\ncp cwallet.sso /opt/oracle/instantclient_19_8/ssl_wallet\nmkdir vha\nmv Central_Server.zip /vha\ncd /vha\nunzip Central_Server.zip\nrm -rf Central_Server.zip\nchmod 777 oci8.so\ncp oci8.so /usr/lib64/php/modules/\nmv -f ssl.conf /etc/httpd/conf.d/\nmv -f httpd.conf /etc/httpd/conf/\ncd ..\nyes | cp php.ini /etc/\nusermod -a -G apache ec2-user\nchown -R ec2-user:apache /vha/ispmal\nchmod 2775 /vha/ispmal && find /vha/ispmal -type d -exec sudo chmod 2775 {} \\;\nfind /vha/ispmal -type f -exec sudo chmod 0664 {} \\;\ncd /etc/httpd/conf.d/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sha2.zip sha2.zip\nunzip sha2.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/mod_ssl.so /usr/lib64/httpd/modules/mod_ssl.so\nsystemctl start httpd\nsystemctl enable httpd\nuseradd -m ispadmin -d /home/ispadmin -c \"isp malware admin user\" -s /bin/bash \necho \"00 10 * * * /usr/bin/php /vha/ispmal/acma_mail.php\" | tee -a /var/spool/cron/ispadmin\necho \"00 23 01 * * /vha/ispmal/mail_infosec.php\"| tee -a /var/spool/cron/ispadmin\necho \"50 11 * * * /usr/bin/php /vha/ispmal/send_notification.php\" | tee -a /var/spool/cron/ispadmin\necho \"40 11,22 * * * /usr/bin/php /vha/ispmal/wrapper.php\" | tee -a /var/spool/cron/ispadmin > /vha/ispmal/logs/wrapper_log_$(/bin/date '+\\%d\\%m\\%Y_\\%H\\%M\\%S').txt 2>&1\necho \"30 23 * * * bash /home/ispadmin/isaac/get_isaac_file.sh\" | tee -a /var/spool/cron/ispadmin > /dev/null 2>&1\n\nsystemctl start crond && systemctl enable crond  \ncd /home/ispadmin \nmkdir isaac \ncd / \ncp get_isaac_file.sh /home/ispadmin/isaac/  \n\n#Healthcheck\n#=======================================\nrc=$?\nsleep 15\nstatus=\"$(curl -Isk https://127.0.0.1:443/index.php | head -n 1 | awk '{print $2}')\"\n\n# checking for tomcat and cloudwatch service\nif [ \"$status\" == 200 ] && [ \"$rc\" -eq 0 ]; then\n\n# All done so signal success\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource ISPCentralServerGroup --region ${AWS::Region}\nfi\nEND=$(date +%s);\necho $((END-START)) | awk '{print int($1/60)\":\"int($1%60)}'"
+                 }
+              }
+           }
+        }
+     },
+     "ISPServerGroup": {
+        "Type": "AWS::AutoScaling::AutoScalingGroup",
+        "CreationPolicy": {
+           "ResourceSignal": {
+              "Timeout": "PT15M",
+              "Count": {
+                 "Fn::FindInMap": [
+                    "Environments",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "ASMIN"
+                 ]
+              }
+           }
+        },
+        "UpdatePolicy": {
+           "AutoScalingRollingUpdate": {
+              "MaxBatchSize": 1,
+              "MinInstancesInService": 1,
+              "PauseTime": "PT15M",
+              "WaitOnResourceSignals": true
+           }
+        },
+        "Properties": {
+           "VPCZoneIdentifier": [
+              {
+                 "Ref": "ParamPrivateSubnetIdA"
+              },
+              {
+                 "Ref": "ParamPrivateSubnetIdB"
+              }
+           ],
+           "HealthCheckGracePeriod": 300,
+           "HealthCheckType": "EC2",
+           "LaunchTemplate": {
+              "LaunchTemplateId": {
+                 "Ref": "LaunchTemplate"
+              },
+              "Version": {
+                 "Fn::GetAtt": [
+                    "LaunchTemplate",
+                    "LatestVersionNumber"
+                 ]
+              }
+           },
+           "MinSize": {
+              "Fn::FindInMap": [
+                 "Environments",
+                 {
+                    "Ref": "ParamEnvName"
+                 },
+                 "ASMIN"
+              ]
+           },
+           "MaxSize": {
+              "Fn::FindInMap": [
+                 "Environments",
+                 {
+                    "Ref": "ParamEnvName"
+                 },
+                 "ASMAX"
+              ]
+           },
+           "TargetGroupARNs": [
+              {
+                 "Ref": "NLBTargetGroup"
+              }
+           ],
+           "Tags": [
+              {
+                 "Key": "Name",
+                 "Value": {
+                    "Fn::Join": [
+                       "-",
+                       [
+                          "tpgt",
+                          {
+                             "Ref": "ParamEnvName"
+                          },
+                          "isp",
+                          "ec2-reportingserver"
+                       ]
+                    ]
+                 },
+                 "PropagateAtLaunch": true
+              },
+              {
+                 "Key": "Backup",
+                 "Value": "false",
+                 "PropagateAtLaunch": true
+              },
+              {
+                 "Key": "DataClassification",
+                 "Value": "Highly Sensitive",
+                 "PropagateAtLaunch": true
+              },
+              {
+                 "Key": "Role",
+                 "Value": "WebServer",
+                 "PropagateAtLaunch": true
+              }
+           ]
+        }
+     },
+     "ScalingPolicy": {
+        "Type": "AWS::AutoScaling::ScalingPolicy",
+        "Properties": {
+           "AutoScalingGroupName": {
+              "Ref": "ISPServerGroup"
+           },
+           "PolicyType": "TargetTrackingScaling",
+           "TargetTrackingConfiguration": {
+              "PredefinedMetricSpecification": {
+                 "PredefinedMetricType": "ASGAverageCPUUtilization"
+              },
+              "TargetValue": 75
+           }
+        }
+     },
+     "LaunchTemplate": {
+        "Type": "AWS::EC2::LaunchTemplate",
+        "Properties": {
+           "LaunchTemplateName": {
+              "Fn::Join": [
+                 "-",
+                 [
+                    "tpgt",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "isp",
+                    "launchtemplate"
+                 ]
+              ]
+           },
+           "LaunchTemplateData": {
+              "ImageId": {
+                 "Ref": "ParamImageId"
+              },
+              "InstanceType": {
+                 "Fn::FindInMap": [
+                    "Environments",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "InstanceType"
+                 ]
+              },
+              "IamInstanceProfile": {
+                 "Arn": {
+                    "Ref": "ParamEc2IamProfile"
+                 }
+              },
+              "NetworkInterfaces": [
+                 {
+                    "DeviceIndex": 0,
+                    "AssociatePublicIpAddress": false,
+                    "DeleteOnTermination": true,
+                    "Groups": [
+                       {
+                          "Ref": "Ec2SecurityGroup"
+                       }
+                    ]
+                 }
+              ],
+              "TagSpecifications": [
+                 {
+                    "ResourceType": "instance",
+                    "Tags": [
+                       {
+                          "Key": "Name",
+                          "Value": {
+                             "Fn::Join": [
+                                "-",
+                                [
+                                   "tpgt",
+                                   {
+                                      "Ref": "ParamEnvName"
+                                   },
+                                   "isp",
+                                   "launchtemplate-reportingserver"
+                                ]
+                             ]
+                          }
+                       }
+                    ]
+                 }
+              ],
+              "BlockDeviceMappings": [
+                 {
+                    "DeviceName": "/dev/xvda",
+                    "Ebs": {
+                       "VolumeSize": {
+                          "Fn::FindInMap": [
+                             "Environments",
+                             {
+                                "Ref": "ParamEnvName"
+                             },
+                             "VolumeSize"
+                          ]
+                       },
+                       "VolumeType": "gp2",
+                       "DeleteOnTermination": true,
+                       "Encrypted": true,
+                       "KmsKeyId": {
+                          "Ref": "ParamKmsCmk"
+                       }
+                    }
+                 }
+              ],
+              "UserData": {
+                 "Fn::Base64": {
+                    "Fn::Sub": "#!/bin/bash -xe\nSTART=$(date +%s);\n\n# Set Secured Variables\n#============================\n\n# Get DB Credentials and store in Shell env variables utilized by ISP application ./bin/setenv.sh script\nexport ENV_USER=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-ispmal-dbuser --query \"Parameters[].{Val:Value}\" --output text)\nexport ENV_PASS=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-dbpass --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\nexport NESSUS_KEY=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-nessuskey --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\n# Enable console logging now that sensitive values have been retrieved\nexec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\n\n# Get the latest CloudFormation package\nyum update -y aws-cfn-bootstrap\n\n#Cloudwatch configuration\n#============================\ncat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json <<EOL\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/auth\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/auth\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/user-data.log\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/user-data.log\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/access_log*.txt\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-access-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log*.log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-error-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/vha/ispmal/logs/ispm_log_server*.log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-ispm-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          }\n        ]\n      }\n    }\n  }\n}\n\nEOL\nsudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a append-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json\n\n#Splunk Installation\n#============================\ncd ~/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/splunkforwarder-8.0.5-Linux-x86_64.tgz /opt/ && cd /opt\ntar -xvzf splunkforwarder-8.0.5-Linux-x86_64.tgz\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/isp-np-splunk-config.zip /opt/ && unzip isp-np-splunk-config.zip\ncd isp-np-splunk-config/ && cp -rp vha_all_deploymentclient vha_isp_uf_config /opt/splunkforwarder/etc/apps\nsudo /opt/splunkforwarder/bin/splunk start --accept-license --answer-yes --no-prompt --seed-passwd mypassword\n\n#Taneble agent installation\n#=============================\ncd ~/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/NessusAgent-8.0.0-amzn.x86_64.rpm .\nsudo yum -y install NessusAgent-8.0.0-amzn.x86_64.rpm\n\n# Hide Nessus key value in sub-script\ncat >nessusStart.sh <<EOL\n#!/bin/bash\n/opt/nessus_agent/sbin/nessuscli agent link --key=\"$NESSUS_KEY\" --host=cloud.tenable.com --port=443\n\nEOL\nchmod +x nessusStart.sh\n./nessusStart.sh\n\n/sbin/service nessusagent start\n\n#FireEye installation\n#============================\ncd ~/\nmkdir -p /opt/fireeye\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/IMAGE_HX_AGENT_LINUX_30.19.6.tgz IMAGE_HX_AGENT_LINUX_30.19.6.tgz\ntar -xvzf IMAGE_HX_AGENT_LINUX_30.19.6.tgz\nmv xagt-30.19.6-1.el7.x86_64.rpm agent_config.json /opt/fireeye && cd /opt/fireeye/\nsudo yum -y install xagt-30.19.6-1.el7.x86_64.rpm\nsudo /opt/fireeye/bin/xagt -i /opt/fireeye/agent_config.json\nsudo systemctl start xagt && sudo systemctl enable xagt\n\n#Application Installation\n#=======================================\namazon-linux-extras install java-openjdk11 -y\namazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2\nyum install -y httpd mariadb-server php-gd.x86_64 php-devel.x86_64\n\ncd /\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-basic-linux.x64-19.8.0.0.0dbru.zip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/Web_Server.zip Web_Server.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/httpd.conf httpd.conf\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/php.ini php.ini\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sqlnet.ora sqlnet.ora\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/tnsnames.ora tnsnames.ora\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso.lck cwallet.sso.lck\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/rds-ca-2019-root.pem rds-ca-2019-root.pem\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso cwallet.sso\nyes | cp -rf httpd.conf /etc/httpd/conf\ncd /opt\nmkdir oracle\ncd oracle\ncd ../../\ncp instantclient-basic-linux.x64-19.8.0.0.0dbru.zip /opt/oracle/\ncp instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip  /opt/oracle/\ncd /opt/oracle\nunzip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip\nunzip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip\nldconfig\ncd instantclient_19_8\nmkdir ssl_wallet\ncd ../../../\ncp sqlnet.ora  /opt/oracle/instantclient_19_8/network/admin/\ncp tnsnames.ora /opt/oracle/instantclient_19_8/network/admin/\ncp cwallet.sso.lck /opt/oracle/instantclient_19_8/ssl_wallet\ncp rds-ca-2019-root.pem /opt/oracle/instantclient_19_8/ssl_wallet\ncp cwallet.sso /opt/oracle/instantclient_19_8/ssl_wallet\nmkdir vha\nmv Web_Server.zip /vha\ncd /vha\nunzip Web_Server.zip\nrm -rf Web_Server.zip\nchmod 777 oci8.so\ncp oci8.so /usr/lib64/php/modules/\ncd ..\nyes | cp php.ini /etc/\nusermod -a -G apache ec2-user\nchown -R ec2-user:apache /vha/ispmal\nchmod 2775 /vha/ispmal && find /vha/ispmal -type d -exec sudo chmod 2775 {} \\;\nfind /vha/ispmal -type f -exec sudo chmod 0664 {} \\;\ncd /etc/httpd/conf.d/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sha2.zip sha2.zip\nunzip sha2.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/ssl.conf ssl.conf\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/mod_ssl.so /usr/lib64/httpd/modules/mod_ssl.so\nsystemctl start httpd\nsystemctl enable httpd\n\n#Healthcheck\n#=======================================\nrc=$?\nsleep 15\nstatus=\"$(curl -Isk https://127.0.0.1:443/index.php | head -n 1 | awk '{print $2}')\"\n\n# checking for tomcat and cloudwatch service\nif [ \"$status\" == 200 ] && [ \"$rc\" -eq 0 ]; then\n\n# All done so signal success\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource ISPServerGroup --region ${AWS::Region}\nfi\nEND=$(date +%s);\necho $((END-START)) | awk '{print int($1/60)\":\"int($1%60)}'"
+                 }
+              }
+           }
+        }
+     },
+     "ApacheErrorLogGroup": {
+        "Type": "AWS::Logs::LogGroup",
+        "Properties": {
+           "LogGroupName": {
+              "Fn::Sub": "customer-isp-${ParamEnvName}-apache-error-log"
+           },
+           "RetentionInDays": {
+              "Fn::FindInMap": [
+                 "Environments",
+                 {
+                    "Ref": "ParamEnvName"
+                 },
+                 "LogRetentionInDays"
+              ]
+           }
+        }
+     },
+     "ApacheAccessLogGroup": {
+        "Type": "AWS::Logs::LogGroup",
+        "Properties": {
+           "LogGroupName": {
+              "Fn::Sub": "customer-isp-${ParamEnvName}-apache-access-log"
+           },
+           "RetentionInDays": {
+              "Fn::FindInMap": [
+                 "Environments",
+                 {
+                    "Ref": "ParamEnvName"
+                 },
+                 "LogRetentionInDays"
+              ]
+           }
+        }
+     },
+     "ApacheISPMLogGroup": {
+        "Type": "AWS::Logs::LogGroup",
+        "Properties": {
+           "LogGroupName": {
+              "Fn::Sub": "customer-isp-${ParamEnvName}-apache-ispm-log"
+           },
+           "RetentionInDays": {
+              "Fn::FindInMap": [
+                 "Environments",
+                 {
+                    "Ref": "ParamEnvName"
+                 },
+                 "LogRetentionInDays"
+              ]
+           }
+        }
+     },
+     "ApacheCentralErrorLogGroup": {
+        "Type": "AWS::Logs::LogGroup",
+        "Properties": {
+           "LogGroupName": {
+              "Fn::Sub": "customer-isp-${ParamEnvName}-apache-central-error-log"
+           },
+           "RetentionInDays": {
+              "Fn::FindInMap": [
+                 "Environments",
+                 {
+                    "Ref": "ParamEnvName"
+                 },
+                 "LogRetentionInDays"
+              ]
+           }
+        }
+     },
+     "ApacheCentralAccessLogGroup": {
+        "Type": "AWS::Logs::LogGroup",
+        "Properties": {
+           "LogGroupName": {
+              "Fn::Sub": "customer-isp-${ParamEnvName}-apache-central-access-log"
+           },
+           "RetentionInDays": {
+              "Fn::FindInMap": [
+                 "Environments",
+                 {
+                    "Ref": "ParamEnvName"
+                 },
+                 "LogRetentionInDays"
+              ]
+           }
+        }
+     },
+     "ApacheCentralISPMLogGroup": {
+        "Type": "AWS::Logs::LogGroup",
+        "Properties": {
+           "LogGroupName": {
+              "Fn::Sub": "customer-isp-${ParamEnvName}-apache-central-ispm-log"
+           },
+           "RetentionInDays": {
+              "Fn::FindInMap": [
+                 "Environments",
+                 {
+                    "Ref": "ParamEnvName"
+                 },
+                 "LogRetentionInDays"
+              ]
+           }
+        }
+     },
+     "Ec2CentralSecurityGroup": {
+        "Type": "AWS::EC2::SecurityGroup",
+        "Properties": {
+           "GroupDescription": "Security group applied to ISP EC2 Central instances",
+           "VpcId": {
+              "Ref": "ParamVpc"
+           },
+           "Tags": [
+              {
+                 "Key": "Name",
+                 "Value": {
+                    "Fn::Join": [
+                       "-",
+                       [
+                          "tpgt",
+                          {
+                             "Ref": "ParamEnvName"
+                          },
+                          "isp",
+                          "ec2secgrp-centralserver"
+                       ]
+                    ]
+                 }
+              }
+           ],
+           "SecurityGroupIngress": [
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from bastions 1",
+                 "CidrIp": "10.153.2.192/26"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from bastions 2",
+                 "CidrIp": "10.153.3.0/26"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from AMS Bastion Subnet for AMS investigation ",
+                 "CidrIp": "10.153.1.0/25"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow HTTPS from SMS gateway ",
+                 "CidrIp": "10.153.140.128/25"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow HTTPS from Newington ",
+                 "CidrIp": "10.45.4.101/32"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow HTTPS from Erskine Park ",
+                 "CidrIp": "10.47.4.62/32"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow HTTPS from Subnet A ",
+                 "CidrIp": "10.153.140.128/26"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow HTTPS from Subnet B ",
+                 "CidrIp": "10.153.140.192/26"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from bastions 3",
+                 "CidrIp": "10.153.3.64/26"
+              }
+           ]
+        }
+     },
+     "Ec2SecurityGroup": {
+        "Type": "AWS::EC2::SecurityGroup",
+        "Properties": {
+           "GroupDescription": "Security group applied to ISP EC2 instances",
+           "VpcId": {
+              "Ref": "ParamVpc"
+           },
+           "Tags": [
+              {
+                 "Key": "Name",
+                 "Value": {
+                    "Fn::Join": [
+                       "-",
+                       [
+                          "tpgt",
+                          {
+                             "Ref": "ParamEnvName"
+                          },
+                          "isp",
+                          "ec2secgrp-reportingserver"
+                       ]
+                    ]
+                 }
+              }
+           ],
+           "SecurityGroupIngress": [
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from bastions 1",
+                 "CidrIp": "10.153.2.192/26"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from bastions 2",
+                 "CidrIp": "10.153.3.0/26"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from bastions 3",
+                 "CidrIp": "10.153.3.64/26"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow HTTPS from Citrix 1",
+                 "CidrIp": "10.33.20.0/23"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow HTTPS from Citrix 2",
+                 "CidrIp": "10.33.19.0/23"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow HTTPS from Citrix 3",
+                 "CidrIp": "10.33.212.0/23"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow HTTPS from Jump server",
+                 "CidrIp": "10.33.16.75/32"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow HTTPS from Subnet A ",
+                 "CidrIp": "10.153.140.128/26"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow HTTPS from Subnet B ",
+                 "CidrIp": "10.153.140.192/26"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from AMS Bastion Subnet for AMS investigation ",
+                 "CidrIp": "10.153.1.0/25"
+              }
+           ]
+        }
+     },
+     "CentralserverNetworkLoadBalancer": {
+        "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+        "Properties": {
+           "Name": {
+              "Fn::Join": [
+                 "-",
+                 [
+                    "tpgt",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "isp",
+                    "NLBCS"
+                 ]
+              ]
+           },
+           "Subnets": [
+              {
+                 "Ref": "ParamPrivateSubnetIdA"
+              },
+              {
+                 "Ref": "ParamPrivateSubnetIdB"
+              }
+           ],
+           "Scheme": "internal",
+           "Type": "network",
+           "IpAddressType": "ipv4",
+           "Tags": [
+              {
+                 "Key": "Name",
+                 "Value": {
+                    "Fn::Join": [
+                       "-",
+                       [
+                          "tpgt",
+                          {
+                             "Ref": "ParamEnvName"
+                          },
+                          "isp",
+                          "NLBCS"
+                       ]
+                    ]
+                 }
+              }
+           ]
+        }
+     },
+     "CentralserverNLBTargetGroup": {
+        "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+        "Properties": {
+           "Name": {
+              "Fn::Join": [
+                 "-",
+                 [
+                    "tpgt",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "isp",
+                    "NLBTargetGroupCS"
+                 ]
+              ]
+           },
+           "HealthCheckIntervalSeconds": 30,
+           "HealthyThresholdCount": 5,
+           "Port": 443,
+           "Protocol": "TLS",
+           "TargetType": "instance",
+           "UnhealthyThresholdCount": 5,
+           "HealthCheckProtocol": "HTTPS",
+           "HealthCheckPath": "/index.php",
+           "HealthCheckPort": 443,
+           "VpcId": {
+              "Ref": "ParamVpc"
+           },
+           "Tags": [
+              {
+                 "Key": "Name",
+                 "Value": {
+                    "Fn::Join": [
+                       "-",
+                       [
+                          "tpgt",
+                          {
+                             "Ref": "ParamEnvName"
+                          },
+                          "isp",
+                          "NLBTargetGroupCS"
+                       ]
+                    ]
+                 }
+              }
+           ]
+        }
+     },
+     "CentralserverNLBListener": {
+        "Type": "AWS::ElasticLoadBalancingV2::Listener",
+        "Properties": {
+           "DefaultActions": [
+              {
+                 "Type": "forward",
+                 "TargetGroupArn": {
+                    "Ref": "CentralserverNLBTargetGroup"
+                 }
+              }
+           ],
+           "LoadBalancerArn": {
+              "Ref": "CentralserverNetworkLoadBalancer"
+           },
+           "Port": 443,
+           "Protocol": "TLS",
+           "SslPolicy": "ELBSecurityPolicy-2016-08",
+           "Certificates": [
+              {
+                 "CertificateArn": {
+                    "Ref": "ParamAcmCert"
+                 }
+              }
+           ]
+        }
+     },
+     "CentralLoadBalancerAlias": {
+        "Type": "AWS::Route53::RecordSet",
+        "Properties": {
+           "AliasTarget": {
+              "DNSName": {
+                 "Fn::GetAtt": [
+                    "CentralserverNetworkLoadBalancer",
+                    "DNSName"
+                 ]
+              },
+              "HostedZoneId": {
+                 "Fn::GetAtt": [
+                    "CentralserverNetworkLoadBalancer",
+                    "CanonicalHostedZoneID"
+                 ]
+              },
+              "EvaluateTargetHealth": false
+           },
+           "HostedZoneId": {
+              "Ref": "ParamHostedZone"
+           },
+           "Name": {
+              "Fn::Join": [
+                 ".",
+                 [
+                    "central",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "ispmalware.aws.vodafone.com.au"
+                 ]
+              ]
+           },
+           "Type": "A"
+        }
+     },
+     "NetworkLoadBalancer": {
+        "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+        "Properties": {
+           "Name": {
+              "Fn::Join": [
+                 "-",
+                 [
+                    "tpgt",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "isp",
+                    "NLB"
+                 ]
+              ]
+           },
+           "Subnets": [
+              {
+                 "Ref": "ParamPrivateSubnetIdA"
+              },
+              {
+                 "Ref": "ParamPrivateSubnetIdB"
+              }
+           ],
+           "Scheme": "internal",
+           "Type": "network",
+           "IpAddressType": "ipv4",
+           "Tags": [
+              {
+                 "Key": "Name",
+                 "Value": {
+                    "Fn::Join": [
+                       "-",
+                       [
+                          "tpgt",
+                          {
+                             "Ref": "ParamEnvName"
+                          },
+                          "isp",
+                          "NLB"
+                       ]
+                    ]
+                 }
+              }
+           ]
+        }
+     },
+     "NLBTargetGroup": {
+        "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+        "Properties": {
+           "Name": {
+              "Fn::Join": [
+                 "-",
+                 [
+                    "tpgt",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "isp",
+                    "NLBTargetGroup"
+                 ]
+              ]
+           },
+           "HealthCheckIntervalSeconds": 30,
+           "HealthyThresholdCount": 5,
+           "Port": 443,
+           "Protocol": "TLS",
+           "TargetType": "instance",
+           "UnhealthyThresholdCount": 5,
+           "HealthCheckProtocol": "HTTPS",
+           "HealthCheckPath": "/index.php",
+           "HealthCheckPort": 443,
+           "VpcId": {
+              "Ref": "ParamVpc"
+           },
+           "Tags": [
+              {
+                 "Key": "Name",
+                 "Value": {
+                    "Fn::Join": [
+                       "-",
+                       [
+                          "tpgt",
+                          {
+                             "Ref": "ParamEnvName"
+                          },
+                          "isp",
+                          "NLBTargetGroup"
+                       ]
+                    ]
+                 }
+              }
+           ]
+        }
+     },
+     "NLBListener": {
+        "Type": "AWS::ElasticLoadBalancingV2::Listener",
+        "Properties": {
+           "DefaultActions": [
+              {
+                 "Type": "forward",
+                 "TargetGroupArn": {
+                    "Ref": "NLBTargetGroup"
+                 }
+              }
+           ],
+           "LoadBalancerArn": {
+              "Ref": "NetworkLoadBalancer"
+           },
+           "Port": 443,
+           "Protocol": "TLS",
+           "SslPolicy": "ELBSecurityPolicy-2016-08",
+           "Certificates": [
+              {
+                 "CertificateArn": {
+                    "Ref": "ParamAcmCert"
+                 }
+              }
+           ]
+        }
+     },
+     "LoadBalancerAlias": {
+        "Type": "AWS::Route53::RecordSet",
+        "Properties": {
+           "AliasTarget": {
+              "DNSName": {
+                 "Fn::GetAtt": [
+                    "NetworkLoadBalancer",
+                    "DNSName"
+                 ]
+              },
+              "HostedZoneId": {
+                 "Fn::GetAtt": [
+                    "NetworkLoadBalancer",
+                    "CanonicalHostedZoneID"
+                 ]
+              },
+              "EvaluateTargetHealth": false
+           },
+           "HostedZoneId": {
+              "Ref": "ParamHostedZone"
+           },
+           "Name": {
+              "Fn::Join": [
+                 ".",
+                 [
+                    "web",
+                    {
+                       "Ref": "ParamEnvName"
+                    },
+                    "ispmalware.aws.vodafone.com.au"
+                 ]
+              ]
+           },
+           "Type": "A"
+        }
+     }
+  },
+  "Outputs": {
+     "NlbUrl": {
+        "Description": "Network Load balancer URL",
+        "Value": {
+           "Fn::Join": [
+              "",
+              [
+                 "https://",
+                 {
+                    "Fn::GetAtt": [
+                       "NetworkLoadBalancer",
+                       "DNSName"
+                    ]
+                 }
+              ]
+           ]
+        }
+     },
+     "LaunchTemplateId": {
+        "Description": "Launch template ID",
+        "Value": {
+           "Ref": "LaunchTemplate"
+        }
+     },
+     "AutoScalingId": {
+        "Description": "Auto scaling group ID",
+        "Value": {
+           "Ref": "ISPServerGroup"
+        }
+     },
+     "Ec2SecurityGroupId": {
+        "Description": "Security group ID",
+        "Value": {
+           "Ref": "Ec2SecurityGroup"
+        }
+     },
+     "Route53Alias": {
+        "Description": "Route 53 alias record for ALB",
+        "Value": {
+           "Ref": "LoadBalancerAlias"
+        }
+     }
+  }
+}
