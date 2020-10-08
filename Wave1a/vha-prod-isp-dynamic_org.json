@@ -1,46 +1,45 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "TPGT ISP NPE dynamic stack. Creates an NLB,ASG,CW Log Groups and Security Groups.",
+  "Description": "TPGT ISP PROD dynamic stack. Creates an NLB,ASG,CW Log Groups and Security Groups.",
   "Parameters": {
      "ParamEnvName": {
         "Type": "String",
         "Description": "Stack environment name",
-        "Default": "npe",
+        "Default": "prod",
         "AllowedValues": [
-           "prod",
-           "npe"
+           "prod"
         ],
-        "ConstraintDescription": "Allowed values are prod,npe."
+        "ConstraintDescription": "Allowed value is prod"
      },
      "ParamVpc": {
         "Type": "String",
         "Description": "VPC ID",
-        "Default": "vpc-06f6a1f974f31cbe3"
+        "Default": "vpc-0b54c8f0cbd685f53"
      },
      "ParamKmsCmk": {
         "Type": "String",
         "Description": "KMS CMK ARN for encryption",
-        "Default": "arn:aws:kms:ap-southeast-2:122323083353:key/88d34f67-2061-4f79-ad8a-13fecafab080"
+        "Default": "arn:aws:kms:ap-southeast-2:655313030751:key/2826ab72-2ed7-4f90-a386-cb1da2bf0b6c"
      },
      "ParamPrivateSubnetIdA": {
         "Type": "String",
         "Description": "Private subnet ID A",
-        "Default": "subnet-0a58d1bb3fc896325"
+        "Default": "subnet-077fb5a4e112368ce"
      },
      "ParamPrivateSubnetIdB": {
         "Type": "String",
         "Description": "Private subnet ID B",
-        "Default": "subnet-0b3092980dabe07b5"
+        "Default": "subnet-09d3543918db4921d"
      },
      "ParamAcmCert": {
         "Type": "String",
         "Description": "ACM certificate ARN for load balancers",
-        "Default": "arn:aws:acm:ap-southeast-2:122323083353:certificate/61e2383a-fa0f-4e6e-937d-2898da84fcf3"
+        "Default": "arn:aws:acm:ap-southeast-2:655313030751:certificate/70987d38-c47d-4667-96e4-bda1e32720ec"
      },
      "ParamEc2IamProfile": {
         "Type": "String",
         "Description": "IAM instance profile to use for ASGs",
-        "Default": "arn:aws:iam::122323083353:instance-profile/tpgt-npe-isp-application-role"
+        "Default": "arn:aws:iam::655313030751:instance-profile/tpgt-prod-isp-application-role"
      },
      "ParamImageId": {
         "Type": "AWS::EC2::Image::Id",
@@ -50,33 +49,26 @@
 	 "ParamRDSClientSGID": {
         "Type": "String",
         "Description": "RDS Client Security Group",
-        "Default": "sg-06501e82bced54fe4"
+        "Default": "sg-0045689acfb179041"
      },
      "ParamHostedZone": {
         "Type": "String",
         "Description": "Route 53 zone ID",
-        "Default": "Z056892730LLEQQ8CL2ZK"
+        "Default": "Z01342843MVRCJ9TAJD67"
      }
   },
   "Mappings": {
      "Environments": {
-        "pt": {
+        "prod": {
            "ASMAX": 4,
            "ASMIN": 2,
+		   "CSMAX": 2,
+		   "CSMIN": 1,
            "LogRetentionInDays": 60,
            "VolumeSize": 50,
            "InstanceType": "t2.medium",
-           "AZ1Subnet": "10.153.140.128/26",
-           "AZ2Subnet": "10.153.140.192/26"
-        },
-        "npe": {
-           "ASMAX": 2,
-           "ASMIN": 1,
-           "LogRetentionInDays": 7,
-           "VolumeSize": 30,
-           "InstanceType": "t2.medium",
-           "AZ1Subnet": "10.153.140.128/26",
-           "AZ2Subnet": "10.153.140.192/26"
+           "AZ1Subnet": "10.153.10.192/26",
+           "AZ2Subnet": "10.153.10.128/26"
         }
      }
   },
@@ -87,8 +79,8 @@
            "ApacheCentralErrorLogGroup",
            "ApacheCentralAccessLogGroup",
            "ApacheCentralISPMLogGroup" 
-        ],		   
-        "CreationPolicy": {
+        ],
+		"CreationPolicy": {
            "ResourceSignal": {
               "Timeout": "PT15M",
               "Count": {
@@ -97,7 +89,7 @@
                     {
                        "Ref": "ParamEnvName"
                     },
-                    "ASMIN"
+                    "CSMIN"
                  ]
               }
            }
@@ -109,7 +101,7 @@
               "PauseTime": "PT15M",
               "WaitOnResourceSignals": true
            }
-        },
+        },		
         "Properties": {
            "VPCZoneIdentifier": [
               {
@@ -119,7 +111,7 @@
                  "Ref": "ParamPrivateSubnetIdB"
               }
            ],
-           "HealthCheckGracePeriod": 600,
+           "HealthCheckGracePeriod": 720,
            "HealthCheckType": "ELB",
            "LaunchTemplate": {
               "LaunchTemplateId": {
@@ -138,7 +130,7 @@
                  {
                     "Ref": "ParamEnvName"
                  },
-                 "ASMIN"
+                 "CSMIN"
               ]
            },
            "MinSize": {
@@ -147,7 +139,7 @@
                  {
                     "Ref": "ParamEnvName"
                  },
-                 "ASMIN"
+                 "CSMIN"
               ]
            },
            "MaxSize": {
@@ -156,7 +148,7 @@
                  {
                     "Ref": "ParamEnvName"
                  },
-                 "ASMAX"
+                 "CSMAX"
               ]
            },
            "TargetGroupARNs": [
@@ -247,8 +239,8 @@
                           "Ref": "Ec2CentralSecurityGroup"
                        },
 					   {
-					      "Ref": "ParamRDSClientSGID"
-					   }
+                          "Ref": "ParamRDSClientSGID"
+                       }
                     ]
                  }
               ],
@@ -299,7 +291,7 @@
               ],
               "UserData": {
                  "Fn::Base64": {
-                    "Fn::Sub": "#!/bin/bash -xe\nSTART=$(date +%s);\n\n# Set Secured Variables\n#============================\n\n# Get DB Credentials and store in Shell env variables utilized by ISP application ./bin/setenv.sh script\nexport ENV_USER=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-ispmal-dbuser --query \"Parameters[].{Val:Value}\" --output text)\nexport ENV_PASS=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-dbpass --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\nexport NESSUS_KEY=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-nessuskey --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\nexport MFTPUB_KEY=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-mftpubkey --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\n\n# Enable console logging now that sensitive values have been retrieved\nexec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\n\n# Get the latest CloudFormation package\nyum update -y aws-cfn-bootstrap\n\n#Cloudwatch configuration\n#============================\ncat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json <<EOL\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/auth\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/auth\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/user-data.log\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/user-data.log\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-central-access-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-central-error-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/vha/ispmal/logs/ispm_log_server*.log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-central-ispm-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          }\n        ]\n      }\n    }\n  }\n}\n\nEOL\nsudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a append-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json\n\n#Splunk Installation\n#============================\ncd ~/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/isp-np-splunk-config.zip /opt/splunkforwarder/etc/apps/ && cd /opt/splunkforwarder/etc/apps/\nunzip isp-np-splunk-config.zip\nexport ip=$(curl http:/169.254.169.254/latest/meta-data/local-ipv4);echo -e \"[default]\\nhost = $ip\" >> /opt/splunkforwarder/etc/system/local/inputs.conf\nrm -rf isp-np-splunk-config.zip && chmod -R 755 *\nsudo /opt/splunkforwarder/bin/splunk start --accept-license --answer-yes --no-prompt --seed-passwd mypassword\n\n#Taneble agent installation\n#=============================\ncd ~/\n# Hide Nessus key value in sub-script\ncat >nessusStart.sh <<EOL\n#!/bin/bash\n/opt/nessus_agent/sbin/nessuscli agent link --key=\"$NESSUS_KEY\" --host=cloud.tenable.com --port=443 -–name=\"$ip\" --groups=AMS_SOE_Amazon2\n\nEOL\nchmod +x nessusStart.sh\n./nessusStart.sh\n\n/sbin/service nessusagent start\n\n#FireEye installation\n#============================\ncd /opt/fireeye/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/vha-npe-isp.tenable_agent.json /opt/fireeye/agent_config.json\nsudo /opt/fireeye/bin/xagt -i /opt/fireeye/agent_config.json\nsudo systemctl start xagt && sudo systemctl enable xagt\n#Application Installation\n#=======================================\ncd / \namazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2\nyum install -y httpd mariadb-server php-gd.x86_64 php-devel.x86_64\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-basic-linux.x64-19.8.0.0.0dbru.zip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip  \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/Central_Server.zip Central_Server.zip \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/php.ini php.ini \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sqlnet.ora sqlnet.ora \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/tnsnames.ora tnsnames.ora \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso.lck cwallet.sso.lck \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/rds-ca-2019-root.pem rds-ca-2019-root.pem \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso cwallet.sso \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/get_isaac_file.sh get_isaac_file.sh\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/acma_download.sh acma_download.sh\ncd /opt\nmkdir oracle\ncd oracle\ncd ../../\ncp instantclient-basic-linux.x64-19.8.0.0.0dbru.zip /opt/oracle/\ncp instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip  /opt/oracle/\ncd /opt/oracle\nunzip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip\nunzip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip\nldconfig\ncd instantclient_19_8\nmkdir ssl_wallet\ncd ../../../\ncp sqlnet.ora  /opt/oracle/instantclient_19_8/network/admin/\ncp tnsnames.ora /opt/oracle/instantclient_19_8/network/admin/\ncp cwallet.sso.lck /opt/oracle/instantclient_19_8/ssl_wallet\ncp rds-ca-2019-root.pem /opt/oracle/instantclient_19_8/ssl_wallet\ncp cwallet.sso /opt/oracle/instantclient_19_8/ssl_wallet\nmkdir vha\nmv Central_Server.zip /vha\ncd /vha\nunzip Central_Server.zip\nrm -rf Central_Server.zip\nchmod 777 oci8.so\ncp oci8.so /usr/lib64/php/modules/\nmv -f ssl.conf /etc/httpd/conf.d/\nmv -f httpd.conf /etc/httpd/conf/\ncd ..\nyes | cp php.ini /etc/\ncp /get_isaac_file.sh /acma_download.sh  /vha/ispmal/\nusermod -a -G apache ec2-user\nchown -R ec2-user:apache /vha/ispmal\nchmod 2775 /vha/ispmal && find /vha/ispmal -type d -exec sudo chmod 2775 {} \\;\nfind /vha/ispmal -type f -exec sudo chmod 0664 {} \\;\ncd /etc/httpd/conf.d/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sha2.zip sha2.zip\nunzip sha2.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/mod_ssl.so /usr/lib64/httpd/modules/mod_ssl.so\nsystemctl start httpd\nsystemctl enable httpd\n#schedule jobs\n#=================================================================\ncd /\n\n(echo \"00 10 * * * /usr/bin/bash /vha/ispmal/acma_download.sh\" ; echo \"00 23 01 * * /vha/ispmal/mail_infosec.php\" ; echo \"50 11 * * * /usr/bin/php /vha/ispmal/send_notification.php\" ; echo \"40 11,22 * * * /usr/bin/php /vha/ispmal/wrapper.php\" ; echo \"30 23 * * * bash /vha/ispmal/get_isaac_file.sh\") | crontab -\n\nsystemctl start crond && systemctl enable crond  \n\nmkdir isaac \ncd / \ncp get_isaac_file.sh /home/ispadmin/isaac/\n  \n#MFT Configuration\n#=====================================\nuseradd -m mftispm_user -u 3999 -d /home/mftispm_user -G users -c \"MFT User\" -s /bin/bash\nmkdir -p /home/mftispm_user/.ssh\ncat >mftsshconf.sh <<EOL\necho $MFTPUB_KEY > /home/mftispm_user/.ssh/authorized_keys\nEOL\nchmod +x mftsshconf.sh\n./mftsshconf.sh\nchmod 700 /home/mftispm_user/.ssh && chmod 600 /home/mftispm_user/.ssh/authorized_keys\nchown -R mftispm_user:mftispm_user /home/mftispm_user/.ssh\nsystemctl restart sshd\nmkdir -p /vha/ispmal/BI_entries/in && mkdir -p /vha/ispmal/BI_entries/out\nchmod 744 -R /vha/ispmal/BI_entries/out && chmod 777 -R /vha/ispmal/BI_entries/out\nchmod 777 -R /vha/ispmal/msisdn_entries/out && chmod 777 -R /vha/ispmal/isaac/in\n\n#Healthcheck\n#=======================================\nrc=$?\nsleep 15\nstatus=\"$(curl -Isk https://127.0.0.1:443/index.php | head -n 1 | awk '{print $2}')\"\n\n# checking for tomcat and cloudwatch service\nif [ \"$status\" != 200 ] ; then\n\n# Application not running so signal to stop the stack update\n/opt/aws/bin/cfn-signal --stack ${AWS::StackId} --resource ISPCentralServerGroup --region ${AWS::Region}\nfi\nEND=$(date +%s);\necho $((END-START)) | awk '{print int($1/60)\":\"int($1%60)}'"
+                    "Fn::Sub": "#!/bin/bash -xe\nSTART=$(date +%s);\n\n# Set Secured Variables\n#============================\n\n# Get DB Credentials and store in Shell env variables utilized by ISP application ./bin/setenv.sh script\nexport ENV_USER=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-dbuser --query \"Parameters[].{Val:Value}\" --output text)\nexport ENV_PASS=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-dbpass --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\nexport NESSUS_KEY=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-nessuskey --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\nexport MFTPUB_KEY=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-intmftpubkey --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\n# Enable console logging now that sensitive values have been retrieved\nexec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\n\n# Get the latest CloudFormation package\nyum update -y aws-cfn-bootstrap\n\n#Cloudwatch configuration\n#============================\ncat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json <<EOL\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/auth\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/auth\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/user-data.log\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/user-data.log\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-central-access-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-central-error-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/vha/ispmal/logs/ispm_log_server*.log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-central-ispm-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          }\n        ]\n      }\n    }\n  }\n}\n\nEOL\nsudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a append-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json\n\n#Splunk Installation\n#============================\ncd ~/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/isp-prod-splunk-config.zip /opt/splunkforwarder/etc/apps/ && cd /opt/splunkforwarder/etc/apps/\nunzip isp-prod-splunk-config.zip\nexport ip=$(curl http:/169.254.169.254/latest/meta-data/local-ipv4);echo -e \"[default]\\nhost = $ip\" >> /opt/splunkforwarder/etc/system/local/inputs.conf\nrm -rf isp-prod-splunk-config.zip && chmod -R 755 *\nsudo /opt/splunkforwarder/bin/splunk start --accept-license --answer-yes --no-prompt --seed-passwd mypassword\n/opt/splunkforwarder/bin/splunk enable boot-start\n\n#Taneble agent installation\n#=============================\ncd ~/\n# Hide Nessus key value in sub-script\ncat >nessusStart.sh <<EOL\n!/bin/bash\n/opt/nessus_agent/sbin/nessuscli agent link --key=\"$NESSUS_KEY\" --host=cloud.tenable.com --port=443 -–name=\"$ip\" --groups=AMS_SOE_Amazon2\n\nEOL\nchmod +x nessusStart.sh\n./nessusStart.sh\n\n/sbin/service nessusagent start\n\n#FireEye installation\n#============================\ncd /opt/fireeye/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/vha-prod-isp.tenable_agent.json /opt/fireeye/agent_config.json\nsudo /opt/fireeye/bin/xagt -i /opt/fireeye/agent_config.json\nsudo systemctl start xagt && sudo systemctl enable xagt\n#Application Installation\n#=======================================\ncd / \namazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2\nyum install -y httpd mariadb-server php-gd.x86_64 php-devel.x86_64\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-basic-linux.x64-19.8.0.0.0dbru.zip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip  \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/Central_Server.zip Central_Server.zip \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/php.ini php.ini \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sqlnet.ora sqlnet.ora \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/tnsnames.ora tnsnames.ora \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso.lck cwallet.sso.lck \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/rds-ca-2019-root.pem rds-ca-2019-root.pem \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso cwallet.sso \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/get_isaac_file.sh get_isaac_file.sh\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/acma_download.sh acma_download.sh\ncd /opt\nmkdir oracle\ncd oracle\ncd ../../\ncp instantclient-basic-linux.x64-19.8.0.0.0dbru.zip /opt/oracle/\ncp instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip  /opt/oracle/\ncd /opt/oracle\nunzip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip\nunzip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip\nldconfig\ncd instantclient_19_8\nmkdir ssl_wallet\ncd ../../../\ncp sqlnet.ora  /opt/oracle/instantclient_19_8/network/admin/\ncp tnsnames.ora /opt/oracle/instantclient_19_8/network/admin/\ncp cwallet.sso.lck /opt/oracle/instantclient_19_8/ssl_wallet\ncp rds-ca-2019-root.pem /opt/oracle/instantclient_19_8/ssl_wallet\ncp cwallet.sso /opt/oracle/instantclient_19_8/ssl_wallet\nmkdir vha\nmv Central_Server.zip /vha\ncd /vha\nunzip Central_Server.zip\nrm -rf Central_Server.zip\nchmod 777 oci8.so\ncp oci8.so /usr/lib64/php/modules/\nmv -f ssl.conf /etc/httpd/conf.d/\nmv -f httpd.conf /etc/httpd/conf/\ncd ..\nyes | cp php.ini /etc/\ncp /get_isaac_file.sh /acma_download.sh  /vha/ispmal/\nusermod -a -G apache ec2-user\nchown -R ec2-user:apache /vha/ispmal\nchmod 2775 /vha/ispmal && find /vha/ispmal -type d -exec sudo chmod 2775 {} \\;\nfind /vha/ispmal -type f -exec sudo chmod 0664 {} \\;\ncd /etc/httpd/conf.d/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sha2.zip sha2.zip\nunzip sha2.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/mod_ssl.so /usr/lib64/httpd/modules/mod_ssl.so\nsystemctl start httpd\nsystemctl enable httpd\n#schedule jobs\n#=================================================================\ncd /\n\n(echo \"00 10 * * * /usr/bin/bash /vha/ispmal/acma_download.sh\" ; echo \"00 23 01 * * /vha/ispmal/mail_infosec.php\" ; echo \"50 11 * * * /usr/bin/php /vha/ispmal/send_notification.php\" ; echo \"40 11,22 * * * /usr/bin/php /vha/ispmal/wrapper.php\" ; echo \"30 23 * * * bash /vha/ispmal/get_isaac_file.sh\") | crontab -\n\nsystemctl start crond && systemctl enable crond \n#MFT Configuration\n#=====================================\nuseradd -m mftispm_user -u 3999 -d /home/mftispm_user -G users -c \"MFT User\" -s /bin/bash\nmkdir -p /home/mftispm_user/.ssh\ncat >mftsshconf.sh <<EOL\necho $MFTPUB_KEY > /home/mftispm_user/.ssh/authorized_keys\nEOL\nchmod +x mftsshconf.sh\n./mftsshconf.sh\nchmod 700 /home/mftispm_user/.ssh && chmod 600 /home/mftispm_user/.ssh/authorized_keys\nchown -R mftispm_user:mftispm_user /home/mftispm_user/.ssh\nsystemctl restart sshd\nmkdir -p /vha/ispmal/BI_entries/in && mkdir -p /vha/ispmal/BI_entries/out\nchmod 744 -R /vha/ispmal/BI_entries/out && chmod 777 -R /vha/ispmal/BI_entries/out\nchmod 777 -R /vha/ispmal/msisdn_entries/out && chmod 777 -R /vha/ispmal/isaac/in\n\n#Healthcheck\n#=======================================\nsleep 15\nstatus=\"$(curl -Isk https://127.0.0.1:443/index.php | head -n 1 | awk '{print $2}')\"\n\n# checking for tomcat and cloudwatch service\nif [ \"$status\" != 200 ] ; then\n\n# Application not running so signal to stop the stack update\n/opt/aws/bin/cfn-signal --stack ${AWS::StackId} --resource ISPCentralServerGroup --region ${AWS::Region}\nfi\nEND=$(date +%s);\necho $((END-START)) | awk '{print int($1/60)\":\"int($1%60)}'"
                  }
               }
            }
@@ -311,8 +303,8 @@
 		   "ApacheErrorLogGroup",
 		   "ApacheAccessLogGroup",
 		   "ApacheISPMLogGroup"
-		],		   
-        "CreationPolicy": {
+		],
+       "CreationPolicy": {
            "ResourceSignal": {
               "Timeout": "PT15M",
               "Count": {
@@ -321,7 +313,7 @@
                     {
                        "Ref": "ParamEnvName"
                     },
-                    "ASMIN"
+                    "CSMIN"
                  ]
               }
            }
@@ -333,7 +325,7 @@
               "PauseTime": "PT15M",
               "WaitOnResourceSignals": true
            }
-        },
+        },		
         "Properties": {
            "VPCZoneIdentifier": [
               {
@@ -474,8 +466,8 @@
                           "Ref": "Ec2SecurityGroup"
                        },
 					   {
-					      "Ref": "ParamRDSClientSGID"
-					   }
+                          "Ref": "ParamRDSClientSGID"
+                       }
                     ]
                  }
               ],
@@ -526,7 +518,7 @@
               ],
               "UserData": {
                  "Fn::Base64": {
-                    "Fn::Sub": "#!/bin/bash -xe\nSTART=$(date +%s);\n\n# Set Secured Variables\n#============================\n\n# Get DB Credentials and store in Shell env variables utilized by ISP application ./bin/setenv.sh script\nexport ENV_USER=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-ispmal-dbuser --query \"Parameters[].{Val:Value}\" --output text)\nexport ENV_PASS=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-dbpass --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\nexport NESSUS_KEY=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-nessuskey --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\n\n# Enable console logging now that sensitive values have been retrieved\nexec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\n\n# Get the latest CloudFormation package\nyum update -y aws-cfn-bootstrap\n\n#Cloudwatch configuration\n#============================\ncat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json <<EOL\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/auth\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/auth\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/user-data.log\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/user-data.log\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-access-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-error-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/vha/ispmal/logs/ispm_log_server*.log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-ispm-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          }\n        ]\n      }\n    }\n  }\n}\n\nEOL\nsudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a append-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json\n\n#Splunk Installation\n#============================\n#cd ~/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/isp-np-splunk-config.zip /opt/splunkforwarder/etc/apps/ && cd /opt/splunkforwarder/etc/apps/\nunzip isp-np-splunk-config.zip\nexport ip=$(curl http:/169.254.169.254/latest/meta-data/local-ipv4);echo -e \"[default]\\nhost = $ip\" >> /opt/splunkforwarder/etc/system/local/inputs.conf\nrm -rf isp-np-splunk-config.zip && chmod -R 755 *\nsudo /opt/splunkforwarder/bin/splunk start --accept-license --answer-yes --no-prompt --seed-passwd mypassword\n/opt/splunkforwarder/bin/splunk enable boot-start\n\n#Taneble agent installation\n#=============================\ncd ~/\n# Hide Nessus key value in sub-script\ncat >nessusStart.sh <<EOL\n!/bin/bash\n/opt/nessus_agent/sbin/nessuscli agent link --key=\"$NESSUS_KEY\" --host=cloud.tenable.com --port=443 -–name=\"$ip\" --groups=AMS_SOE_Amazon2\n\nEOL\nchmod +x nessusStart.sh\n./nessusStart.sh\n\n/sbin/service nessusagent start\n\n#FireEye installation\n#============================\ncd /opt/fireeye/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/vha-npe-isp.tenable_agent.json /opt/fireeye/agent_config.json\nsudo /opt/fireeye/bin/xagt -i /opt/fireeye/agent_config.json\nsudo systemctl start xagt && sudo systemctl enable xagt\n#Application Installation\n#=======================================\namazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2\nyum install -y httpd mariadb-server php-gd.x86_64 php-devel.x86_64\n\ncd /\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-basic-linux.x64-19.8.0.0.0dbru.zip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/Web_Server.zip Web_Server.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/httpd.conf httpd.conf\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/php.ini php.ini\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sqlnet.ora sqlnet.ora\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/tnsnames.ora tnsnames.ora\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso.lck cwallet.sso.lck\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/rds-ca-2019-root.pem rds-ca-2019-root.pem\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso cwallet.sso\nyes | cp -rf httpd.conf /etc/httpd/conf\ncd /opt\nmkdir oracle\ncd oracle\ncd ../../\ncp instantclient-basic-linux.x64-19.8.0.0.0dbru.zip /opt/oracle/\ncp instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip  /opt/oracle/\ncd /opt/oracle\nunzip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip\nunzip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip\nldconfig\ncd instantclient_19_8\nmkdir ssl_wallet\ncd ../../../\ncp sqlnet.ora  /opt/oracle/instantclient_19_8/network/admin/\ncp tnsnames.ora /opt/oracle/instantclient_19_8/network/admin/\ncp cwallet.sso.lck /opt/oracle/instantclient_19_8/ssl_wallet\ncp rds-ca-2019-root.pem /opt/oracle/instantclient_19_8/ssl_wallet\ncp cwallet.sso /opt/oracle/instantclient_19_8/ssl_wallet\nmkdir vha\nmv Web_Server.zip /vha\ncd /vha\nunzip Web_Server.zip\nrm -rf Web_Server.zip\nchmod 777 oci8.so\ncp oci8.so /usr/lib64/php/modules/\ncd ..\nyes | cp php.ini /etc/\nusermod -a -G apache ec2-user\nchown -R ec2-user:apache /vha/ispmal\nchmod 2775 /vha/ispmal && find /vha/ispmal -type d -exec sudo chmod 2775 {} \\;\nfind /vha/ispmal -type f -exec sudo chmod 0664 {} \\;\ncd /etc/httpd/conf.d/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sha2.zip sha2.zip\nunzip sha2.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/ssl.conf ssl.conf\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/mod_ssl.so /usr/lib64/httpd/modules/mod_ssl.so\nsystemctl start httpd\nsystemctl enable httpd\n\n#Healthcheck\n#=======================================\nsleep 15\nstatus=\"$(curl -Isk https://127.0.0.1:443/index.php | head -n 1 | awk '{print $2}')\"\n\n# checking for tomcat and cloudwatch service\nif [ \"$status\" != 200 ] ; then\n\n# Application not running so signal to stop the stack update\n/opt/aws/bin/cfn-signal --stack ${AWS::StackId} --resource ISPServerGroup --region ${AWS::Region}\nfi\nEND=$(date +%s);\necho $((END-START)) | awk '{print int($1/60)\":\"int($1%60)}'"
+                    "Fn::Sub":"#!/bin/bash -xe\nSTART=$(date +%s);\n\n# Set Secured Variables\n#============================\n\n# Get DB Credentials and store in Shell env variables utilized by ISP application ./bin/setenv.sh script\nexport ENV_USER=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-dbuser --query \"Parameters[].{Val:Value}\" --output text)\nexport ENV_PASS=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-dbpass --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\nexport NESSUS_KEY=$(aws --region ${AWS::Region} ssm get-parameters --name tpgt-${ParamEnvName}-isp-nessuskey --with-decryption --query \"Parameters[].{Val:Value}\" --output text)\n\n\n# Enable console logging now that sensitive values have been retrieved\nexec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\n\n# Get the latest CloudFormation package\nyum update -y aws-cfn-bootstrap\n\n#Cloudwatch configuration\n#============================\ncat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json <<EOL\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/auth\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/auth\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/user-data.log\",\n            \"log_group_name\": \"{instance_id}\",\n            \"log_stream_name\": \"/var/log/user-data.log\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-access-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-error-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/vha/ispmal/logs/ispm_log_server*.log\",\n            \"log_group_name\": \"customer-isp-${ParamEnvName}-apache-ispm-log\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          }\n        ]\n      }\n    }\n  }\n}\n\nEOL\nsudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a append-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent-custom.json\n\n#Splunk Installation\n#============================\n#cd ~/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/isp-prod-splunk-config.zip /opt/splunkforwarder/etc/apps/ && cd /opt/splunkforwarder/etc/apps/\nunzip isp-prod-splunk-config.zip\nexport ip=$(curl http:/169.254.169.254/latest/meta-data/local-ipv4);echo -e \"[default]\\nhost = $ip\" >> /opt/splunkforwarder/etc/system/local/inputs.conf\nrm -rf isp-prod-splunk-config.zip && chmod -R 755 *\nsudo /opt/splunkforwarder/bin/splunk start --accept-license --answer-yes --no-prompt --seed-passwd mypassword\n/opt/splunkforwarder/bin/splunk enable boot-start\n\n#Taneble agent installation\n#=============================\ncd ~/\n# Hide Nessus key value in sub-script\ncat >nessusStart.sh <<EOL\n!/bin/bash\n/opt/nessus_agent/sbin/nessuscli agent link --key=\"$NESSUS_KEY\" --host=cloud.tenable.com --port=443 -–name=\"$ip\" --groups=AMS_SOE_Amazon2\n\nEOL\nchmod +x nessusStart.sh\n./nessusStart.sh\n\n/sbin/service nessusagent start\n\n#FireEye installation\n#============================\ncd /opt/fireeye/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/vha-prod-isp.tenable_agent.json /opt/fireeye/agent_config.json\nsudo /opt/fireeye/bin/xagt -i /opt/fireeye/agent_config.json\nsudo systemctl start xagt && sudo systemctl enable xagt\n#Application Installation\n#=======================================\namazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2\nyum install -y httpd mariadb-server php-gd.x86_64 php-devel.x86_64\n\ncd /\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-basic-linux.x64-19.8.0.0.0dbru.zip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip \naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/Web_Server.zip Web_Server.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/httpd.conf httpd.conf\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/php.ini php.ini\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sqlnet.ora sqlnet.ora\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/tnsnames.ora tnsnames.ora\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso.lck cwallet.sso.lck\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/rds-ca-2019-root.pem rds-ca-2019-root.pem\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/cwallet.sso cwallet.sso\nyes | cp -rf httpd.conf /etc/httpd/conf\ncd /opt\nmkdir oracle\ncd oracle\ncd ../../\ncp instantclient-basic-linux.x64-19.8.0.0.0dbru.zip /opt/oracle/\ncp instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip  /opt/oracle/\ncd /opt/oracle\nunzip instantclient-basic-linux.x64-19.8.0.0.0dbru.zip\nunzip instantclient-sdk-linux.x64-19.8.0.0.0dbru.zip\nldconfig\ncd instantclient_19_8\nmkdir ssl_wallet\ncd ../../../\ncp sqlnet.ora  /opt/oracle/instantclient_19_8/network/admin/\ncp tnsnames.ora /opt/oracle/instantclient_19_8/network/admin/\ncp cwallet.sso.lck /opt/oracle/instantclient_19_8/ssl_wallet\ncp rds-ca-2019-root.pem /opt/oracle/instantclient_19_8/ssl_wallet\ncp cwallet.sso /opt/oracle/instantclient_19_8/ssl_wallet\nmkdir vha\nmv Web_Server.zip /vha\ncd /vha\nunzip Web_Server.zip\nrm -rf Web_Server.zip\nchmod 777 oci8.so\ncp oci8.so /usr/lib64/php/modules/\ncd ..\nyes | cp php.ini /etc/\nusermod -a -G apache ec2-user\nchown -R ec2-user:apache /vha/ispmal\nchmod 2775 /vha/ispmal && find /vha/ispmal -type d -exec sudo chmod 2775 {} \\;\nfind /vha/ispmal -type f -exec sudo chmod 0664 {} \\;\ncd /etc/httpd/conf.d/\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/sha2.zip sha2.zip\nunzip sha2.zip\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/ssl.conf ssl.conf\naws s3 cp s3://tpgt-${ParamEnvName}-isp-s3-app/mod_ssl.so /usr/lib64/httpd/modules/mod_ssl.so\nsystemctl start httpd\nsystemctl enable httpd\n\n#Healthcheck\n#=======================================\nsleep 15\nstatus=\"$(curl -Isk https://127.0.0.1:443/index.php | head -n 1 | awk '{print $2}')\"\n\n# checking for tomcat and cloudwatch service\nif [ \"$status\" != 200 ] ; then\n\n# Application not running so signal to stop the stack update\n/opt/aws/bin/cfn-signal --stack ${AWS::StackId} --resource ISPServerGroup --region ${AWS::Region}\nfi\nEND=$(date +%s);\necho $((END-START)) | awk '{print int($1/60)\":\"int($1%60)}'"
                  }
               }
            }
@@ -674,124 +666,166 @@
                  "Description": "Allow SSH from bastions 2",
                  "CidrIp": "10.153.3.0/26"
               },
-              {
+			  {
                  "IpProtocol": "tcp",
                  "FromPort": 22,
                  "ToPort": 22,
-                 "Description": "Allow SSH from AMS Bastion Subnet for AMS investigation ",
-                 "CidrIp": "10.153.1.0/25"
+                 "Description": "Allow For Automic integration 1 ",
+                 "CidrIp": "10.37.10.40/31"
               },
-              {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from SMS gateway ",
-                 "CidrIp": "10.153.140.128/25"
-              },
-              {
+			  {
                  "IpProtocol": "tcp",
                  "FromPort": 22,
                  "ToPort": 22,
-                 "Description": "Allow HTTPS from Newington ",
-                 "CidrIp": "10.45.4.101/32"
+                 "Description": "Allow For Automic integration 2 ",
+                 "CidrIp": "10.37.10.42/32"
               },
-              {
+			  {
                  "IpProtocol": "tcp",
                  "FromPort": 22,
                  "ToPort": 22,
-                 "Description": "Allow HTTPS from Erskine Park ",
-                 "CidrIp": "10.47.4.62/32"
+                 "Description": "Allow For Automic integration 3 ",
+                 "CidrIp": "10.39.10.40/31"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow For Automic integration 4 ",
+                 "CidrIp": "10.39.10.42/32"
               },
 			  {
                  "IpProtocol": "tcp",
                  "FromPort": 443,
                  "ToPort": 443,
-                 "Description": "Allow HTTPS from Jump server 1",
-                 "CidrIp": "10.33.16.74/32"
+                 "Description": "Allow For JumpHost 1 ",
+                 "CidrIp": "10.33.16.74/31"
               },
 			  {
                  "IpProtocol": "tcp",
                  "FromPort": 443,
                  "ToPort": 443,
-                 "Description": "Allow HTTPS from Jump server 3",
-                 "CidrIp": "10.33.208.74/32"
+                 "Description": "Allow For JumpHost 2 ",
+                 "CidrIp": "10.33.208.74/31"
               },
 			  {
                  "IpProtocol": "tcp",
                  "FromPort": 443,
                  "ToPort": 443,
-                 "Description": "Allow HTTPS from Jump server 2",
-                 "CidrIp": "10.33.16.75/32"
-              },
-              {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Jump server 4",
-                 "CidrIp": "10.33.208.75/32"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Jump server 5",
+                 "Description": "Allow For JumpHost 3 ",
                  "CidrIp": "10.33.208.98/32"
               },
 			  {
                  "IpProtocol": "tcp",
                  "FromPort": 443,
                  "ToPort": 443,
-                 "Description": "Allow HTTPS from Load generator 1",
-                 "CidrIp": "10.45.2.120/29"
+                 "Description": "Allow For Citrix 1",
+                 "CidrIp": "10.33.20.0/23"
               },
 			  {
                  "IpProtocol": "tcp",
                  "FromPort": 443,
                  "ToPort": 443,
-                 "Description": "Allow HTTPS from Load generator 2",
-                 "CidrIp": "10.45.2.128/29"
+                 "Description": "Allow For Citrix 2",
+                 "CidrIp": "10.33.18.0/23"
               },
 			  {
                  "IpProtocol": "tcp",
                  "FromPort": 443,
                  "ToPort": 443,
-                 "Description": "Allow HTTPS from Load generator 3",
-                 "CidrIp": "10.45.2.136/30"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Load generator 4",
-                 "CidrIp": "10.45.2.140/32"
-              },
-              {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow healthchek on subnet A",
-                 "CidrIp": "10.153.140.128/26"
+                 "Description": "Allow For Citrix 3",
+                 "CidrIp": "10.33.212.0/23"
               },
 			  {
                  "IpProtocol": "tcp",
                  "FromPort": 22,
                  "ToPort": 22,
-                 "Description": "Allow SSHhealthchek on subnet A ",
-                 "CidrIp": "10.153.140.128/26"
+                 "Description": "Allow SSH from AMS Bastion Subnet for AMS investigation ",
+                 "CidrIp": "10.153.1.0/25"
+              },
+			  {
+                    "IpProtocol": "tcp",
+                    "FromPort": 443,
+                    "ToPort": 443,
+                    "Description": "Allow HTTPS from Proxy 1",
+                    "CidrIp": "10.37.192.90/32"
+              },
+              {
+                    "IpProtocol": "tcp",
+                    "FromPort": 8443,
+                    "ToPort": 8443,
+                    "Description": "Allow HTTPS from Proxy 2",
+                    "CidrIp": "10.39.192.90/32"
               },
               {
                  "IpProtocol": "tcp",
                  "FromPort": 443,
                  "ToPort": 443,
-                 "Description": "Allow healthchek on subnet B",
-                 "CidrIp": "10.153.140.192/26"
+                 "Description": "Allow HTTPS for NLB healthchek on subnet A ",
+                 "CidrIp": "10.153.10.128/26"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow HTTPS for NLB healthchek on subnet B ",
+                 "CidrIp": "10.153.10.192/26"
               },
 			  {
                  "IpProtocol": "tcp",
                  "FromPort": 22,
                  "ToPort": 22,
-                 "Description": "Allow SSHhealthchek on subnet B ",
-                 "CidrIp": "10.153.140.128/26"
+                 "Description": "Allow SSH for NLB healthchek on subnet A ",
+                 "CidrIp": "10.153.10.128/26"
+              },
+              {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH for NLB healthchek on subnet B ",
+                 "CidrIp": "10.153.10.192/26"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from MFT 1 ",
+                 "CidrIp": "10.37.10.68/32"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from MFT 2 ",
+                 "CidrIp": "10.39.10.103/32"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from MFT 3 ",
+                 "CidrIp": "10.37.10.38/32"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from MFT 4 ",
+                 "CidrIp": "10.39.10.196/32"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from Newington & Erskine Park 1",
+                 "CidrIp": "10.45.4.101/32"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow SSH from  Newington & Erskine Park 2 ",
+                 "CidrIp": "10.47.4.62/32"
               },
               {
                  "IpProtocol": "tcp",
@@ -799,20 +833,6 @@
                  "ToPort": 22,
                  "Description": "Allow SSH from bastions 3",
                  "CidrIp": "10.153.3.64/26"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from PAS subnet",
-                 "CidrIp": "10.153.140.0/25"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 22,
-                 "ToPort": 22,
-                 "Description": "Allow SSH from PAS subnet",
-                 "CidrIp": "10.153.140.0/25"
               }
            ]
         }
@@ -857,6 +877,76 @@
                  "Description": "Allow SSH from bastions 2",
                  "CidrIp": "10.153.3.0/26"
               },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow For Automic integration 1 ",
+                 "CidrIp": "10.37.10.40/31"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow For Automic integration 2 ",
+                 "CidrIp": "10.37.10.42/32"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow For Automic integration 3 ",
+                 "CidrIp": "10.39.10.40/31"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 22,
+                 "ToPort": 22,
+                 "Description": "Allow For Automic integration 4 ",
+                 "CidrIp": "10.39.10.42/32"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow For JumpHost 1 ",
+                 "CidrIp": "10.33.16.74/31"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow For JumpHost 2 ",
+                 "CidrIp": "10.33.208.74/31"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow For JumpHost 3 ",
+                 "CidrIp": "10.33.208.98/32"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow For Citrix 1",
+                 "CidrIp": "10.33.20.0/23"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow For Citrix 2",
+                 "CidrIp": "10.33.18.0/23"
+              },
+			  {
+                 "IpProtocol": "tcp",
+                 "FromPort": 443,
+                 "ToPort": 443,
+                 "Description": "Allow For Citrix 3",
+                 "CidrIp": "10.33.212.0/23"
+              },
               {
                  "IpProtocol": "tcp",
                  "FromPort": 22,
@@ -864,131 +954,19 @@
                  "Description": "Allow SSH from bastions 3",
                  "CidrIp": "10.153.3.64/26"
               },
-              {
+			  {
                  "IpProtocol": "tcp",
                  "FromPort": 443,
                  "ToPort": 443,
-                 "Description": "Allow HTTPS from Citrix 1",
-                 "CidrIp": "10.33.20.0/23"
-              },
-              {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Citrix 2",
-                 "CidrIp": "10.33.18.0/23"
+                 "Description": "Allow HTTPS for NLB healthchek on subnet A ",
+                 "CidrIp": "10.153.10.128/26"
               },
               {
                  "IpProtocol": "tcp",
                  "FromPort": 443,
                  "ToPort": 443,
-                 "Description": "Allow HTTPS from Citrix 3",
-                 "CidrIp": "10.33.212.0/23"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Jump server 1",
-                 "CidrIp": "10.33.16.74/32"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Jump server 2",
-                 "CidrIp": "10.33.16.75/32"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Jump server 3",
-                 "CidrIp": "10.33.208.74/32"
-              },
-              {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Jump server 4",
-                 "CidrIp": "10.33.208.75/32"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Jump server 5",
-                 "CidrIp": "10.33.208.98/32"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Load generator 1",
-                 "CidrIp": "10.45.2.120/29"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Load generator 2",
-                 "CidrIp": "10.45.2.128/29"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Load generator 3",
-                 "CidrIp": "10.45.2.136/30"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Load generator 4",
-                 "CidrIp": "10.45.2.140/32"
-              },
-		      {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Proxy 1",
-                 "CidrIp": "10.37.192.90/32"
-              },
-              {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from Proxy 2",
-                 "CidrIp": "10.39.192.90/32"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow HTTPS from PAS subnet",
-                 "CidrIp": "10.153.140.0/25"
-              },
-			  {
-                 "IpProtocol": "tcp",
-                 "FromPort": 22,
-                 "ToPort": 22,
-                 "Description": "Allow SSH from PAS subnet",
-                 "CidrIp": "10.153.140.0/25"
-              },
-              {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow healthchek on subnet A ",
-                 "CidrIp": "10.153.140.128/26"
-              },
-              {
-                 "IpProtocol": "tcp",
-                 "FromPort": 443,
-                 "ToPort": 443,
-                 "Description": "Allow healthchek on subnet B ",
-                 "CidrIp": "10.153.140.192/26"
+                 "Description": "Allow HTTPS for NLB healthchek on subnet B ",
+                 "CidrIp": "10.153.10.192/26"
               },
               {
                  "IpProtocol": "tcp",
@@ -1024,6 +1002,12 @@
                  "Ref": "ParamPrivateSubnetIdB"
               }
            ],
+		   "LoadBalancerAttributes": [
+		      { 
+			    "Key": "load_balancing.cross_zone.enabled",
+				"Value": "true" 
+			  }
+		   ],
            "Scheme": "internal",
            "Type": "network",
            "IpAddressType": "ipv4",
@@ -1059,7 +1043,7 @@
                        "Ref": "ParamEnvName"
                     },
                     "isp",
-                    "NLBTargetGroupCS"
+                    "NLBTargetGrpCS"
                  ]
               ]
            },
@@ -1087,7 +1071,7 @@
                              "Ref": "ParamEnvName"
                           },
                           "isp",
-                          "NLBTargetGroupCS"
+                          "NLBTargetGrpCS"
                        ]
                     ]
                  }
@@ -1107,7 +1091,7 @@
                        "Ref": "ParamEnvName"
                     },
                     "isp",
-                    "NLBTargetGroupCSMFT"
+                    "NLBTargetGrpCSMFT"
                  ]
               ]
            },
@@ -1134,7 +1118,7 @@
                              "Ref": "ParamEnvName"
                           },
                           "isp",
-                          "NLBTargetGroupCSMFT"
+                          "NLBTargetGrpCSMFT"
                        ]
                     ]
                  }
@@ -1246,6 +1230,12 @@
                  "Ref": "ParamPrivateSubnetIdB"
               }
            ],
+		   "LoadBalancerAttributes": [
+		      { 
+			    "Key": "load_balancing.cross_zone.enabled",
+				"Value": "true" 
+			  }
+		   ],
            "Scheme": "internal",
            "Type": "network",
            "IpAddressType": "ipv4",
@@ -1281,7 +1271,7 @@
                        "Ref": "ParamEnvName"
                     },
                     "isp",
-                    "NLBTargetGroup"
+                    "NLBTargetGrp"
                  ]
               ]
            },
@@ -1309,7 +1299,7 @@
                              "Ref": "ParamEnvName"
                           },
                           "isp",
-                          "NLBTargetGroup"
+                          "NLBTargetGrp"
                        ]
                     ]
                  }

@@ -1,0 +1,61 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "TPGT NPE stack to create EC2 with OpenJdk 11 installed.",
+    "Parameters": {
+        "ParamEnvName": {
+            "Type": "String",
+            "Description": "Stack environment name",
+            "Default": "npe",
+            "AllowedValues": [
+                "npe"
+            ],
+            "ConstraintDescription": "Allowed values are npe."
+        },
+        "ParamImageId": {
+            "Type": "AWS::EC2::Image::Id",
+            "Description": "AMS VHA SOE base image AMI-ID",
+            "Default": "ami-09c5dc694481dde43"
+        },
+        "ParamPrivateSubnetIdA": {
+            "Type": "String",
+            "Description": "Private subnet ID A",
+            "Default": "subnet-0a58d1bb3fc896325"
+        }
+    },
+    "Resources": {
+        "ExampleEc2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "ParamImageId"
+                },
+                "SubnetId": {
+                    "Ref": "ParamPrivateSubnetIdA"
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash -xe\nSTART=$(date +%s);\namazon-linux-extras install java-openjdk11\nEND=$(date +%s);"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    "tpgt",
+                                    {
+                                        "Ref": "ParamEnvName"
+                                    },
+                                    "ec2",
+                                    "java11"
+                                ]
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}

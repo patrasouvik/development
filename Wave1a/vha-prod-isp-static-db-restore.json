@@ -1,46 +1,45 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "TPGT ISP NPE static stack. Creates RDS and parameter",
+  "Description": "TPGT ISP PROD static stack. Creates RDS and parameter",
   "Parameters": {
     "ParamEnvName": {
       "Type": "String",
       "Description": "Stack environment name",
-      "Default": "npe",
+      "Default": "prod",
       "AllowedValues": [
-        "prod",
-        "npe"
+        "prod"
       ],
-      "ConstraintDescription": "Allowed values are prod,npe"
+      "ConstraintDescription": "Allowed value is prod"
     },
     "ParamVpc": {
       "Type": "String",
       "Description": "VPC ID",
-      "Default": "vpc-06f6a1f974f31cbe3"
+      "Default": "vpc-0b54c8f0cbd685f53" 
     },
     "ParamKmsCmk": {
       "Type": "String",
       "Description": "KMS CMK ARN for encryption",
-      "Default": "arn:aws:kms:ap-southeast-2:122323083353:key/88d34f67-2061-4f79-ad8a-13fecafab080"
+      "Default": "arn:aws:kms:ap-southeast-2:655313030751:key/2826ab72-2ed7-4f90-a386-cb1da2bf0b6c"
     },
     "ParamPrivateSubnetIdA": {
       "Type": "String",
       "Description": "Private subnet ID A",
-      "Default": "subnet-0a58d1bb3fc896325"
+      "Default": "subnet-077fb5a4e112368ce"
     },
     "ParamPrivateSubnetIdB": {
       "Type": "String",
       "Description": "Private subnet ID B",
-      "Default": "subnet-0b3092980dabe07b5"
+      "Default": "subnet-09d3543918db4921d"
     },
     "ParamPrivateSubnetCidrA": {
       "Type": "String",
       "Description": "Private subnet CIDR A",
-      "Default": "10.153.140.128/26"
+      "Default": "10.153.10.192/26"
     },
     "ParamPrivateSubnetCidrB": {
       "Type": "String",
       "Description": "Private subnet CIDR B",
-      "Default": "10.153.140.192/26"
+      "Default": "10.153.10.128/26"
     },
 	"ParamJumpserverSecurityGroup": {
       "Type": "String",
@@ -50,7 +49,7 @@
 	"ParamHostedZone": {
       "Type": "String",
       "Description": "Route 53 zone ID",
-      "Default": "Z056892730LLEQQ8CL2ZK"
+      "Default": "Z01342843MVRCJ9TAJD67"
     }	
   },
   "Resources": {
@@ -67,15 +66,15 @@
         "AssociatedRoles": [
           {
             "FeatureName": "S3_INTEGRATION",
-            "RoleArn": "arn:aws:iam::122323083353:role/tpgt-npe-isp-rds-dbexport-role"
+            "RoleArn": "arn:aws:iam::655313030751:role/tpgt-prod-isp-rds-s3-monitoring-role"
           }
         ],
         "StorageType": "gp2",
         "StorageEncrypted": true,
-        "KmsKeyId": "arn:aws:kms:ap-southeast-2:122323083353:key/88d34f67-2061-4f79-ad8a-13fecafab080",
-        "MasterUsername": "{{resolve:ssm:tpgt-npe-ispmal-dbuser:1}}",
-        "MasterUserPassword": "{{resolve:ssm-secure:tpgt-npe-isp-dbpass:1}}",
-        "BackupRetentionPeriod": 7,
+        "KmsKeyId": "arn:aws:kms:ap-southeast-2:655313030751:key/2826ab72-2ed7-4f90-a386-cb1da2bf0b6c",
+        "MasterUsername": "{{resolve:ssm:tpgt-prod-isp-dbmasteruser:1}}",
+        "MasterUserPassword": "{{resolve:ssm-secure:tpgt-prod-isp-masterpassdb:1}}", 
+        "BackupRetentionPeriod": 35,
         "PreferredBackupWindow": "16:00-17:00",
         "PreferredMaintenanceWindow": "Sun:13:00-Sun:15:00",
         "EnablePerformanceInsights": true,
@@ -87,12 +86,12 @@
         ],
 		"CopyTagsToSnapshot": true,
 		"MonitoringInterval": 60,
-        "MonitoringRoleArn": "arn:aws:iam::122323083353:role/tpgt-npe-isp-rds-monitoring-role",
+        "MonitoringRoleArn": "arn:aws:iam::655313030751:role/tpgt-prod-isp-rds-monitoring-role",
         "AutoMinorVersionUpgrade": false,
-        "DBInstanceIdentifier": "ISPMalware-rds-instance",
-		"DeletionProtection": true,
+        "DBInstanceIdentifier": "ISPMalware-prod-rds-instance-restored",
+		"DBSnapshotIdentifier": "arn:aws:rds:ap-southeast-2:655313030751:snapshot:rds:ispmalware-prod-rds-instance-2020-09-30-16-12",
         "PubliclyAccessible": false,
-        "MultiAZ": false,
+        "MultiAZ": true,
         "DBSubnetGroupName": {
 		  "Ref": "RDSISPDBSubnetGroup"
 		},
@@ -101,7 +100,7 @@
 		  "Ref": "RDSISPDBOptionGroup"
 		},  
         "DBParameterGroupName": {
-		  "Ref": "MyRDSParamGroup"
+		  "Ref": "RDSISPParamGroup"
 		},
         "Tags": [
           {
@@ -120,15 +119,7 @@
               ]
 			  
             }
-		  },
-		  {
-            "Key": "Backup",
-            "Value": "false"
-          },
-		  {
-            "Key": "BackupPolicy",
-            "Value": "NONPROD_STANDARD"
-          }
+		  }
           
         ]
       }
@@ -189,56 +180,7 @@
             "CidrIp": {
               "Ref": "ParamJumpserverSecurityGroup"
             }
-          },	
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "Description": "Allow HTTPS from Citrix 1",
-            "CidrIp": "10.33.18.0/23"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "Description": "Allow HTTPS from Citrix 2",
-            "CidrIp": "10.33.20.0/23"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "Description": "Allow HTTPS from Citrix 3",
-            "CidrIp": "10.33.212.0/23"
-          },
-		  {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "Description": "Allow HTTPS from Jump 1",
-            "CidrIp": "10.33.16.74/32"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "Description": "Allow HTTPS from Jump 3",
-            "CidrIp": "10.33.208.74/32"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "Description": "Allow HTTPS from Jump 4",
-            "CidrIp": "10.33.208.75/32"
-          },
-          {
-           "IpProtocol": "tcp",
-           "FromPort": 443,
-           "ToPort": 443,
-           "Description": "Allow HTTPS from Jump 5",
-           "CidrIp": "10.33.208.98/32"
-           }
+          }
         ]
       }
     },
@@ -303,11 +245,11 @@
               "Value": "Australia/Sydney"
 			} 
            ]
-		  }
+          }
         ]
       }
     },
-    "MyRDSParamGroup": {
+    "RDSISPParamGroup": {
       "Type": "AWS::RDS::DBParameterGroup",
       "Properties": {
         "Family": "oracle-ee-19",
